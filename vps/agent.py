@@ -38,6 +38,9 @@ loop_counter = 0
 # 🌟 动态心跳间隔，默认 5 秒
 global_interval = 5
 
+# 🌟 增加全局 Ping 状态缓存锁，防止在非测速轮次上传 '0' 导致前端图表归零
+last_pings = {"ct": "0", "cu": "0", "cm": "0", "bd": "0"}
+
 # --- 缓存静态信息 ---
 cached_os = cached_arch = cached_cpu_info = cached_virt = None
 
@@ -122,7 +125,7 @@ def get_port_traffic(port, protocol="tcp"):
     except Exception: return 0
 
 def get_system_status(current_interval):
-    global prev_cpu_total, prev_cpu_idle, prev_rx, prev_tx, loop_counter
+    global prev_cpu_total, prev_cpu_idle, prev_rx, prev_tx, loop_counter, last_pings
     stats = {"cpu": 0, "mem": 0, "disk": 0, "uptime": "Unknown", "load": "0.00", "net_in_speed": 0, "net_out_speed": 0}
     
     try:
@@ -174,21 +177,27 @@ def get_system_status(current_interval):
 
     rx_now, tx_now = get_net_dev_bytes()
     stats["net_rx"] = str(rx_now); stats["net_tx"] = str(tx_now)
-    # 🌟 动态除数计算实时网速
+    # 动态除数计算实时网速
     if prev_rx > 0: stats["net_in_speed"] = (rx_now - prev_rx) // current_interval
     if prev_tx > 0: stats["net_out_speed"] = (tx_now - prev_tx) // current_interval
     prev_rx, prev_tx = rx_now, tx_now
 
-    stats["ping_ct"] = stats["ping_cu"] = stats["ping_cm"] = stats["ping_bd"] = "0"
+    # 🌟 每间隔几次循环更新一次真实的 Ping 值缓存
     if loop_counter % 4 == 0:
         idx = (loop_counter // 4) % 3
         if idx == 0: ct, cu, cm = "bj-ct-dualstack.ip.zstaticcdn.com", "bj-cu-dualstack.ip.zstaticcdn.com", "bj-cm-dualstack.ip.zstaticcdn.com"
         elif idx == 1: ct, cu, cm = "sh-ct-dualstack.ip.zstaticcdn.com", "sh-cu-dualstack.ip.zstaticcdn.com", "sh-cm-dualstack.ip.zstaticcdn.com"
         else: ct, cu, cm = "gd-ct-dualstack.ip.zstaticcdn.com", "gd-cu-dualstack.ip.zstaticcdn.com", "gd-cm-dualstack.ip.zstaticcdn.com"
-        stats["ping_ct"] = get_http_ping(ct)
-        stats["ping_cu"] = get_http_ping(cu)
-        stats["ping_cm"] = get_http_ping(cm)
-        stats["ping_bd"] = get_http_ping("lf3-ips.zstaticcdn.com")
+        last_pings["ct"] = get_http_ping(ct)
+        last_pings["cu"] = get_http_ping(cu)
+        last_pings["cm"] = get_http_ping(cm)
+        last_pings["bd"] = get_http_ping("lf3-ips.zstaticcdn.com")
+
+    # 把最近一次成功的 Ping 值塞入状态发给后端，避免前端由于读到0产生断崖
+    stats["ping_ct"] = last_pings["ct"]
+    stats["ping_cu"] = last_pings["cu"]
+    stats["ping_cm"] = last_pings["cm"]
+    stats["ping_bd"] = last_pings["bd"]
 
     os_info, arch, cpu_info, virt = get_static_sysinfo()
     stats.update({"os": os_info, "arch": arch, "cpu_info": cpu_info, "virt": virt})
@@ -309,7 +318,6 @@ def report_status(current_nodes, argo_urls):
     last_reported_bytes = {k: v for k, v in last_reported_bytes.items() if k in current_ids}
     status["node_traffic"] = deltas
 
-    # 🌟 发送报告并动态接收后端下发的最新同步间隔
     try: 
         req = urllib.request.Request(REPORT_URL, data=json.dumps(status).encode(), headers=HEADERS)
         res = urllib.request.urlopen(req, timeout=5)
@@ -337,5 +345,4 @@ if __name__ == "__main__":
         if fetched_nodes is not None: current_active_nodes = fetched_nodes
         argo_urls = process_argo_nodes(current_active_nodes)
         report_status(current_active_nodes, argo_urls)
-        # 🌟 动态休眠，完美应用面版设置的时间
         time.sleep(global_interval)
