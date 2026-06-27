@@ -1,6 +1,6 @@
 // ==========================================
-// KUI Serverless 聚合网关后端 - 完美融合增强版
-// (包含：自动建表升级 + 极速8合1协议生成 + CF Monitor Pro 全量特性集成 + Clash订阅)
+// KUI Serverless 聚合网关后端 - 精简核心版
+// (包含：自动建表升级 + 极速8合1协议生成 + 探针管理 + Clash订阅)
 // ==========================================
 
 async function sha256(text) {
@@ -21,7 +21,6 @@ async function ensureDbSchema(db) {
 
     const probeQueries = [
         `CREATE TABLE IF NOT EXISTS probe_settings (key TEXT PRIMARY KEY, value TEXT)`,
-        `CREATE TABLE IF NOT EXISTS probe_peers (domain TEXT PRIMARY KEY, server_count INTEGER DEFAULT 0, total_asset REAL DEFAULT 0, version INTEGER DEFAULT 0, last_seen INTEGER DEFAULT 0)`,
         `CREATE TABLE IF NOT EXISTS probe_servers (
             id TEXT PRIMARY KEY, name TEXT, cpu TEXT, ram TEXT, disk TEXT, load_avg TEXT, uptime TEXT, last_updated INTEGER,
             ram_total TEXT, net_rx TEXT, net_tx TEXT, net_in_speed TEXT, net_out_speed TEXT,
@@ -63,49 +62,13 @@ async function verifyAuth(authHeader, db, env) {
 }
 
 // ==============================================
-// 探针纯净 API 子系统处理 (整合了排行与Gossip协议)
+// 探针纯净 API 子系统处理
 // ==============================================
 async function handleProbeAPI(request, env, context, pathArray) {
     const subPath = pathArray ? pathArray.join('/') : '';
     const url = new URL(request.url);
     const method = request.method;
     const db = env.DB;
-
-    // 内部排行 API
-    if (method === 'GET' && subPath === 'rank') {
-        const nowMs = Date.now();
-        await db.prepare("DELETE FROM probe_peers WHERE last_seen < ? AND last_seen > 0").bind(nowMs - 86400000).run();
-        const { results: rankData } = await db.prepare('SELECT domain, server_count as servers, total_asset as assets, last_seen FROM probe_peers ORDER BY total_asset DESC, server_count DESC LIMIT 100').all();
-        
-        let asset_rank = 0; let server_rank = 0; let global_servers = 0; let global_assets = 0;
-        rankData.forEach(r => { global_servers += parseInt(r.servers) || 0; global_assets += parseFloat(r.assets) || 0; });
-        
-        const myDomain = url.hostname;
-        const sortedByAsset = [...rankData].sort((a,b) => b.assets - a.assets);
-        const sortedByServer = [...rankData].sort((a,b) => b.servers - a.servers);
-        asset_rank = sortedByAsset.findIndex(r => r.domain === myDomain) + 1;
-        server_rank = sortedByServer.findIndex(r => r.domain === myDomain) + 1;
-        
-        return Response.json({ list: rankData, server_rank: server_rank > 0 ? server_rank : '-', asset_rank: asset_rank > 0 ? asset_rank : '-', global_servers, global_assets, timestamp: nowMs });
-    }
-
-    // Gossip 网络互联同步入口
-    if (method === 'POST' && subPath === 'gossip') {
-        try {
-            const payload = await request.json();
-            if (!payload.domain || !payload.version) return new Response('Bad Request', {status: 400});
-            await db.prepare(`
-              INSERT INTO probe_peers (domain, server_count, total_asset, version, last_seen) VALUES (?, ?, ?, ?, ?)
-              ON CONFLICT(domain) DO UPDATE SET server_count = excluded.server_count, total_asset = excluded.total_asset, version = excluded.version, last_seen = excluded.last_seen WHERE excluded.version > probe_peers.version
-            `).bind(payload.domain, payload.server_count || 0, payload.total_asset || 0, payload.version, Date.now()).run();
-            if (Array.isArray(payload.known_peers)) {
-                for (const peerDomain of payload.known_peers.slice(0, 10)) {
-                    if (peerDomain !== url.hostname) await db.prepare('INSERT OR IGNORE INTO probe_peers (domain, server_count, total_asset, version, last_seen) VALUES (?, 0, 0, 0, 0)').bind(peerDomain).run();
-                }
-            }
-            return new Response('Gossip Synced', {status: 200});
-        } catch (e) { return new Response('Gossip Error', {status: 500}); }
-    }
 
     // Telegram Bot 交互回调控制
     if (method === 'POST' && subPath === 'tg_webhook') {
@@ -165,7 +128,7 @@ async function handleProbeAPI(request, env, context, pathArray) {
     }
 
     if (method === 'GET' && subPath === 'public') {
-        const settings = { theme: 'theme1', is_public: 'true', site_title: '⚡ Server Monitor Pro', show_price: 'true', show_expire: 'true', show_bw: 'true', show_tf: 'true', custom_css: '', custom_bg: '', custom_head: '', custom_script: '', report_interval: '5', asset_currency: '元', seed_nodes: '', enable_popup: 'false', popup_content: '' };
+        const settings = { theme: 'theme1', is_public: 'true', site_title: '⚡ Server Monitor Pro', show_price: 'true', show_expire: 'true', show_bw: 'true', show_tf: 'true', custom_css: '', custom_bg: '', custom_head: '', custom_script: '', report_interval: '5', enable_popup: 'false', popup_content: '' };
         try { const { results } = await db.prepare('SELECT * FROM probe_settings').all(); if (results) results.forEach(r => settings[r.key] = r.value); } catch(e){}
         
         const isAjax = url.searchParams.get('ajax') === '1';
@@ -175,51 +138,6 @@ async function handleProbeAPI(request, env, context, pathArray) {
             if (vDate !== todayStr) { vToday = 1; vDate = todayStr; } else vToday++;
             settings.visits_total = vTotal.toString(); settings.visits_today = vToday.toString(); settings.visits_date = todayStr;
             context.waitUntil(db.prepare(`INSERT INTO probe_settings (key, value) VALUES ('visits_total', ?), ('visits_today', ?), ('visits_date', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(vTotal.toString(), vToday.toString(), todayStr).run().catch(()=>{}));
-
-            // 🌟 触发后台 Gossip 网络计算与发送
-            context.waitUntil((async () => {
-                try {
-                    const nowMs = Date.now();
-                    await db.prepare("DELETE FROM probe_peers WHERE last_seen < ? AND last_seen > 0").bind(nowMs - 86400000).run();
-                    let totalAssetGossip = 0; let totalServersGossip = 0;
-                    const { results: srvs } = await db.prepare("SELECT price FROM probe_servers WHERE is_hidden != 'true'").all();
-                    if (srvs) {
-                        totalServersGossip = srvs.length;
-                        for (const s of srvs) {
-                            if (s.price && s.price.match(/[\d.]+/)) {
-                                let rawAmount = parseFloat(s.price.match(/[\d.]+/)[0]) || 0;
-                                let rate = 1; const pUpper = s.price.toUpperCase();
-                                if (pUpper.includes('USD') || pUpper.includes('$')) rate = 7.23;
-                                else if (pUpper.includes('EUR') || pUpper.includes('€')) rate = 7.85;
-                                else if (pUpper.includes('GBP') || pUpper.includes('£')) rate = 9.12;
-                                else if (pUpper.includes('HKD')) rate = 0.92;
-                                else if (pUpper.includes('JPY')) rate = 0.048;
-                                else if (pUpper.includes('TWD')) rate = 0.22;
-                                else if (pUpper.includes('RUB')) rate = 0.078;
-                                else if (pUpper.includes('CAD')) rate = 5.25;
-                                else if (pUpper.includes('AUD')) rate = 4.75;
-                                totalAssetGossip += rawAmount * rate;
-                            }
-                        }
-                    }
-                    
-                    let seedNodes = settings.seed_nodes || 'tanzhen.kejikkk.com';
-                    let seedList = seedNodes.split(',').map(s => s.trim()).filter(s => s);
-                    let myDomain = url.hostname;
-                    let { results: dbPeers } = await db.prepare('SELECT domain FROM probe_peers WHERE domain != ? ORDER BY RANDOM() LIMIT 3').bind(myDomain).all();
-                    let targetDomains = dbPeers.map(p => p.domain);
-                    if (targetDomains.length === 0) targetDomains = seedList;
-                    const { results: allPeers } = await db.prepare('SELECT domain FROM probe_peers ORDER BY RANDOM() LIMIT 10').all();
-                    const known_peers = allPeers.map(p => p.domain);
-                    
-                    const payload = { domain: myDomain, server_count: totalServersGossip, total_asset: totalAssetGossip, version: nowMs, known_peers: known_peers };
-                    for (const peer of targetDomains) {
-                        if (peer === myDomain) continue;
-                        fetch(`https://${peer}/api/probe/gossip`, { method: 'POST', body: JSON.stringify(payload), headers: {'Content-Type': 'application/json'}, cf: { cacheTtl: 0 } }).catch(()=>{});
-                    }
-                    await db.prepare(`INSERT INTO probe_peers (domain, server_count, total_asset, version, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(domain) DO UPDATE SET server_count=excluded.server_count, total_asset=excluded.total_asset, version=excluded.version, last_seen=excluded.last_seen`).bind(myDomain, totalServersGossip, totalAssetGossip, nowMs, nowMs).run();
-                } catch(e) {}
-            })());
         }
 
         const authHeader = request.headers.get("Authorization");
