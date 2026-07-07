@@ -15,7 +15,10 @@ async function ensureDbSchema(db) {
         `CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, uuid TEXT NOT NULL, vps_ip TEXT NOT NULL, protocol TEXT NOT NULL, port INTEGER NOT NULL, sni TEXT, private_key TEXT, public_key TEXT, short_id TEXT, relay_type TEXT, target_ip TEXT, target_port INTEGER, target_id TEXT, enable INTEGER DEFAULT 1, traffic_used INTEGER DEFAULT 0, traffic_limit INTEGER DEFAULT 0, expire_time INTEGER DEFAULT 0, username TEXT DEFAULT 'admin', FOREIGN KEY(vps_ip) REFERENCES servers(ip) ON DELETE CASCADE)`,
         `CREATE TABLE IF NOT EXISTS traffic_stats (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, delta_bytes INTEGER DEFAULT 0, timestamp INTEGER NOT NULL, FOREIGN KEY(ip) REFERENCES servers(ip) ON DELETE CASCADE)`,
         `CREATE INDEX IF NOT EXISTS idx_traffic_ip_time ON traffic_stats(ip, timestamp)`,
-        `CREATE TABLE IF NOT EXISTS sys_config (key TEXT PRIMARY KEY, val TEXT, ts INTEGER)`
+        `CREATE TABLE IF NOT EXISTS sys_config (key TEXT PRIMARY KEY, val TEXT, ts INTEGER)`,
+        `CREATE TABLE IF NOT EXISTS proxy_ctrl_servers (ip TEXT PRIMARY KEY, details TEXT, last_seen INTEGER)`,
+        `CREATE TABLE IF NOT EXISTS server_logs (ip TEXT PRIMARY KEY, logs TEXT, updated_at INTEGER)`,
+        `CREATE TABLE IF NOT EXISTS global_config (key TEXT PRIMARY KEY, value TEXT)`
     ];
     for (let query of initQueries) { try { await db.prepare(query).run(); } catch (e) {} }
 
@@ -220,28 +223,111 @@ async function handleProbeAPI(request, env, context, pathArray) {
 }
 
 // ==============================================
-// 住宅IP代理桥接：把 KUI 面板/统一 Agent 的 /api/proxy/* 请求转发到独立的
-// Free-Residential-IP-Proxy-Controller 部署（环境变量 PROXY_CTRL_URL + PROXY_CTRL_TOKEN）。
-// 这样面板与 Agent 始终走 KUIDEV 同域，无需前端暴露令牌或处理 CORS。
+// 住宅IP代理：优先桥接外部 Free-Residential-IP-Proxy-Controller；
+// 若未配置 PROXY_CTRL_URL，则回落到本地 D1 控制器（与外部控制器接口对齐）。
 // ==============================================
-async function proxyBridge(method, subPath, search, body, env) {
+async function proxyBridge(method, subPath, request, env) {
     const ctrlUrl = env.PROXY_CTRL_URL;
-    const ctrlToken = env.PROXY_CTRL_TOKEN;
-    if (!ctrlUrl) {
-        return new Response(JSON.stringify({ error: "Proxy controller not configured. Set PROXY_CTRL_URL (and PROXY_CTRL_TOKEN) in Cloudflare Pages env." }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-    }
-    let url = ctrlUrl.replace(/\/+$/, '') + '/api/proxy/' + subPath;
-    if (search) url += (url.includes('?') ? '&' : '?') + search;
-    const init = {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': ctrlToken || '' }
-    };
-    if (body !== null && body !== undefined) init.body = JSON.stringify(body);
-    console.log('[proxy-bridge] ->', method, '/api/proxy/' + subPath, search ? '?' + search : '', body ? JSON.stringify(body).slice(0, 200) : '');
-    const res = await fetch(url, init);
+    if (!ctrlUrl) return await proxyLocal(method, subPath, request, env);
+    const target = ctrlUrl.replace(/\/+$/, '') + '/api/proxy/' + subPath;
+    const init = { method, headers: { 'Content-Type': 'application/json', 'Authorization': env.PROXY_CTRL_TOKEN || '' } };
+    if (method === 'POST') { try { init.body = await request.clone().text(); } catch (e) {} }
+    console.log('[proxy-bridge] ->', method, target);
+    const res = await fetch(target, init);
     const text = await res.text();
-    console.log('[proxy-bridge] <-', method, '/api/proxy/' + subPath, 'status', res.status);
+    console.log('[proxy-bridge] <-', method, target, 'status', res.status);
     return new Response(text, { status: res.status, headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' } });
+}
+
+async function proxyLocal(method, subPath, req, env) {
+    const db = env.DB;
+    await ensureDbSchema(db);
+    const url = new URL(req.url);
+    const proxyUser = env.PROXY_USER || 'proxy';
+    const proxyPass = env.PROXY_PASS || '888888';
+
+    if (subPath === 'config') {
+        if (method === 'GET') {
+            const { results } = await db.prepare('SELECT value FROM global_config WHERE key = ?').bind('slot_map');
+            if (results && results.length > 0) return new Response(results[0].value);
+            return new Response(JSON.stringify({ "0": "JP", "port": 7920 }));
+        }
+        if (method === 'POST') {
+            const data = await req.json();
+            const sanitized = { "0": data["0"] || "JP", "port": parseInt(data.port) || 7920 };
+            if (data.switch_trigger) sanitized.switch_trigger = data.switch_trigger;
+            await db.prepare(`INSERT INTO global_config (key, value) VALUES ('slot_map', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(JSON.stringify(sanitized)).run();
+            return new Response("OK");
+        }
+    }
+
+    if (subPath === 'report' && method === 'POST') {
+        try {
+            const data = await req.json();
+            await db.prepare(`INSERT INTO proxy_ctrl_servers (ip, details, last_seen) VALUES (?1, ?2, ?3) ON CONFLICT(ip) DO UPDATE SET details = excluded.details, last_seen = excluded.last_seen`).bind(data.ip, JSON.stringify(data.details || []), Date.now()).run();
+            if (data.logs) {
+                await db.prepare(`INSERT INTO server_logs (ip, logs, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(ip) DO UPDATE SET logs = excluded.logs, updated_at = excluded.updated_at`).bind(data.ip, data.logs, Date.now()).run();
+            }
+            return new Response("OK", { status: 200 });
+        } catch (e) { return new Response("Error", { status: 500 }); }
+    }
+
+    if (subPath === 'proxies' && method === 'GET') {
+        const cutoff = Date.now() - 120000;
+        await db.prepare('DELETE FROM proxy_ctrl_servers WHERE last_seen < ?').bind(cutoff).run();
+        const { results } = await db.prepare('SELECT ip, details FROM proxy_ctrl_servers').all();
+        const list = [];
+        if (results) {
+            for (const s of results) {
+                const details = JSON.parse(s.details || '[]');
+                const node = details.find(d => d.active) || details[0];
+                if (node) list.push(`socks5://${proxyUser}:${proxyPass}@${s.ip}:${node.port}#${node.country}_ActiveNode_${node.node_ip || 'IP'}`);
+            }
+        }
+        return new Response(list.join('\n'), { headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
+    }
+
+    if (subPath === 'nodes' && method === 'GET') {
+        const cutoff = Date.now() - 120000;
+        await db.prepare('DELETE FROM proxy_ctrl_servers WHERE last_seen < ?').bind(cutoff).run();
+        const { results } = await db.prepare(`SELECT s.ip, s.details, s.last_seen, l.logs FROM proxy_ctrl_servers s LEFT JOIN server_logs l ON s.ip = l.ip ORDER BY s.last_seen DESC`).all();
+        return new Response(JSON.stringify(results || []), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (subPath === 'countries' && method === 'GET') {
+        try {
+            const res = await fetch('https://www.vpngate.net/api/iphone/');
+            const text = await res.text();
+            const lines = text.split('\n');
+            const countries = new Set();
+            for (let i = 2; i < lines.length; i++) {
+                const parts = lines[i].split(',');
+                if (parts.length > 6) {
+                    const c = parts[6];
+                    if (c && c.length === 2 && c !== 'xx' && c !== '--') countries.add(c.toUpperCase());
+                }
+            }
+            const preset = ["US","JP","KR","SG","HK","TW","GB","DE","FR","NL","CA","AU","IN","VN","BR","AE","MY","TH","PH","ID","TR","ZA","IT","ES","RU","CH","SE","PL","NO","DK","FI","IE","AT","NZ","BE","PT","CZ","GR","HU","RO","BG","HR","SK","SI","LT","LV","EE","UA","RS","BA","CY","MT","IS","LU"];
+            return new Response(JSON.stringify(Array.from(new Set([...preset, ...Array.from(countries)])).sort()), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+        } catch {
+            return new Response(JSON.stringify(["US","JP","KR","SG","HK","TW"]), { headers: { 'Content-Type': 'application/json' } });
+        }
+    }
+
+    if (subPath.startsWith('testisp-lookup/') && method === 'GET') {
+        const targetIp = subPath.replace('testisp-lookup/', '');
+        try {
+            const resp = await fetch(`https://testisp.info/api/check?ip=${encodeURIComponent(targetIp)}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+            });
+            const text = await resp.text();
+            return new Response(text, { status: resp.status, headers: { 'Content-Type': resp.headers.get('content-type') || 'application/json', 'Access-Control-Allow-Origin': '*' } });
+        } catch (err) {
+            return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
+    }
+
+    return new Response("Not Found", { status: 404 });
 }
 
 // ==============================================
@@ -411,28 +497,13 @@ export async function onRequest(context) {
         return Response.json({ success: true, configs: machineNodes, proxy: proxyCfg });
     }
 
-    // 🌟 住宅IP代理：桥接到独立的 Free-Residential-IP-Proxy-Controller 部署
-    // 原版控制器仅支持 pool / config / report / switch，不包含 mesh。
+    // 🌟 住宅IP代理：优先外部控制器 (PROXY_CTRL_URL)；未配置时回落到本地 D1 实现
     if (action === "proxy") {
-        const sub = params.path && params.path[1] ? params.path[1] : '';
-        if (sub === "mesh") {
-            return new Response(JSON.stringify({ error: "mesh is not supported by the original Free-Residential-IP-Proxy-Controller" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        const sub = params.path && params.path.length > 1 ? params.path.slice(1).join('/') : '';
+        if (sub === "mesh" || sub.startsWith("mesh/")) {
+            return new Response(JSON.stringify({ error: "mesh is not supported" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
         }
-        try {
-            if (method === "GET") {
-                const search = new URL(request.url).searchParams.toString();
-                const getSub = sub === "pool" ? "pool" : "config";
-                return await proxyBridge("GET", getSub, search, null, env);
-            }
-            if (method === "POST") {
-                let body = {};
-                try { body = await request.json(); } catch (e) {}
-                return await proxyBridge("POST", sub, null, body, env);
-            }
-            return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-        } catch (e) {
-            return new Response(JSON.stringify({ error: "PROXY_BRIDGE_ERR: " + (e && e.message ? e.message : String(e)) }), { status: 502, headers: { 'Content-Type': 'application/json' } });
-        }
+        return await proxyBridge(method, sub, request, env);
     }
 
     // 🌟 核心拦截并拆分普通订阅与 Clash 订阅生成
