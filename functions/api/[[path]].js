@@ -268,10 +268,10 @@ async function proxyLocal(method, subPath, req, env) {
     if (subPath === 'config') {
         if (method === 'GET') {
             try {
-                const { results } = await db.prepare('SELECT value FROM proxy_slot_map WHERE key = ?').bind('slot_map');
+                const row = await db.prepare("SELECT value FROM probe_settings WHERE key = 'proxy_slot_map'").first();
                 let slotMap = { "0": "JP", "port": 7920 };
-                if (results && results.length > 0) {
-                    try { slotMap = JSON.parse(results[0].value); } catch(e) {}
+                if (row && row.value) {
+                    try { slotMap = JSON.parse(row.value); } catch(e) {}
                 }
                 const rawCountry = (slotMap["0"] || slotMap.country || "JP").toString().toUpperCase();
                 const proxyCfg = { enabled: true, port: slotMap.port || 7920, user: env.PROXY_USER || 'proxy', pass: env.PROXY_PASS || '888888', country: rawCountry };
@@ -284,10 +284,12 @@ async function proxyLocal(method, subPath, req, env) {
                 const rawCountry = (data["0"] || data.country || "JP").toString().toUpperCase().trim();
                 const sanitized = { "0": rawCountry, "country": rawCountry, "port": parseInt(data.port) || 7920 };
                 if (data.switch_trigger) sanitized.switch_trigger = data.switch_trigger;
-                await db.prepare(`INSERT INTO proxy_slot_map (key, value) VALUES ('slot_map', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).bind(JSON.stringify(sanitized)).run();
+                console.log('[proxy-config-save] writing to probe_settings:', JSON.stringify(sanitized));
+                await db.prepare("INSERT INTO probe_settings (key, value) VALUES ('proxy_slot_map', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(sanitized)).run();
                 const proxyCfg = { enabled: true, port: sanitized.port, user: env.PROXY_USER || 'proxy', pass: env.PROXY_PASS || '888888', country: rawCountry };
+                console.log('[proxy-config-save] success, returning:', JSON.stringify({ slot_map: sanitized }));
                 return new Response(JSON.stringify({ success: true, slot_map: sanitized, proxy: proxyCfg }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
-            } catch (e) { return new Response(JSON.stringify({ success: false, error: "CONFIG_WRITE_ERR: " + e.message }), { status: 500, headers: { 'Content-Type': 'application/json' } }); }
+            } catch (e) { console.error('[proxy-config-save] FAILED:', e.message); return new Response(JSON.stringify({ success: false, error: "CONFIG_WRITE_ERR: " + e.message }), { status: 500, headers: { 'Content-Type': 'application/json' } }); }
         }
     }
 
