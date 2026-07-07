@@ -75,17 +75,44 @@ def get_recent_logs():
         return res.stdout
     except: return "Waiting for logs..."
 
+def fetch_controller_config():
+    """拉取控制器下发的配置，兼容多种路径约定：
+    - 本地 KUI 后端:        /api/proxy/config
+    - 外部原版控制器:        /api/config  (KUI 的 proxyBridge 转发时会剥离 proxy 段)
+    - 裸根路径:             /config
+    只要任一端点返回合法 JSON 即采用，避免“下发后自动回退 JP”的问题。
+    """
+    base = C2_URL.rstrip('/')
+    candidates = [
+        f"{base}{C2_API_PREFIX}/config",
+        f"{base}/api/config",
+        f"{base}/config",
+    ]
+    last_err = ""
+    for url in candidates:
+        try:
+            req = urllib.request.Request(url, headers=get_c2_headers())
+            with urllib.request.urlopen(req, timeout=10) as res:
+                raw = res.read().decode("utf-8")
+                data = json.loads(raw)
+                if isinstance(data, dict):
+                    print(f"[cfg] 拉取配置成功 ({url}): {raw}", flush=True)
+                    return data
+        except Exception as e:
+            last_err = str(e)
+            continue
+    print(f"[cfg] 所有配置端点均拉取失败({last_err})，沿用当前目标地区", flush=True)
+    return None
+
 def update_config_loop():
     global target_country, last_switch_trigger, PROXY_PORT, tun_main, tun_backup
     while True:
         try:
-            url = f"{C2_URL}{C2_API_PREFIX}/config"
-            req = urllib.request.Request(url, headers=get_c2_headers())
-            with urllib.request.urlopen(req, timeout=10) as res:
-                raw = res.read().decode("utf-8")
-                print(f"[cfg] 拉取配置成功: {raw}", flush=True)
-                data = json.loads(raw)
-                desired_country = str(data.get("0") or data.get("country") or "JP").upper()
+            data = fetch_controller_config()
+            if not data:
+                time.sleep(15)
+                continue
+            desired_country = str(data.get("0") or data.get("country") or "JP").upper()
                 switch_trigger = int(data.get("switch_trigger", 0))
                 new_port = int(data.get("port", 7920))
                 print(f"[cfg] 解析: country={desired_country}, port={new_port}, trigger={switch_trigger}, current_country={target_country}", flush=True)
