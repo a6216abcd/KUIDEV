@@ -139,7 +139,7 @@ def c2_heartbeat_loop():
 def setup_env():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not AUTH_FILE.exists():
-        AUTH_FILE.write_text("vpn\\nvpn\\n", encoding="utf-8")
+        AUTH_FILE.write_text("vpn\nvpn\n", encoding="utf-8")
         AUTH_FILE.chmod(0o600)
     # 强制系统解除反向路径过滤，防止策略路由双拨时数据包被内核丢弃
     subprocess.run(["sysctl", "-w", "net.ipv4.conf.all.rp_filter=2"], capture_output=True)
@@ -208,7 +208,7 @@ def connect_node(tun: Tunnel, node: dict):
         cmd = ["openvpn", "--config", str(cfg_path), "--dev", tun.name, "--dev-type", "tun", 
                "--nobind", "--route-nopull",
                "--pull-filter", "ignore", "route-ipv6", "--pull-filter", "ignore", "ifconfig-ipv6", 
-               "--auth-user-pass", str(AUTH_FILE), "--auth-nocache", 
+               "--auth-user-pass", str(AUTH_FILE),
                "--connect-timeout", "5", "--connect-retry-max", "1", "--verb", "3"] + cipher_args
                
         with open(log_file, "w") as f: process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
