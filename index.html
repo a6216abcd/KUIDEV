@@ -1349,7 +1349,7 @@
                 const res = await fetch('/api/proxy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-                    body: JSON.stringify({ "0": val, "port": port })
+                    body: JSON.stringify({ "0": val, "country": val, "port": port })
                 });
                 const text = await res.text();
                 if (!res.ok) throw new Error(text || res.status);
@@ -1366,7 +1366,7 @@
                 const res = await fetch('/api/proxy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-                    body: JSON.stringify({ "0": val, "port": port, "switch_trigger": Date.now() })
+                    body: JSON.stringify({ "0": val, "country": val, "port": port, "switch_trigger": Date.now() })
                 });
                 if (!res.ok) { const err = await res.text(); throw new Error(err || res.status); }
                 alert('🔄 重拨指令已下发！VPS 将清退当前通道池重新并发建连...');
