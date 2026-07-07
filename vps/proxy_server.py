@@ -96,12 +96,12 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
     upstream = None
     try:
         data = first_byte
-        while b"\\r\\n\\r\\n" not in data and len(data) < 65536:
+        while b"\r\n\r\n" not in data and len(data) < 65536:
             chunk = client.recv(4096)
             if not chunk: break
             data += chunk
-        head, rest = data.split(b"\\r\\n\\r\\n", 1)
-        lines = head.decode("iso-8859-1", errors="replace").split("\\r\\n")
+        head, rest = data.split(b"\r\n\r\n", 1)
+        lines = head.decode("iso-8859-1", errors="replace").split("\r\n")
         
         expected_auth = "Basic " + base64.b64encode(PROXY_USER + b":" + PROXY_PASS).decode("ascii")
         auth_passed = False
@@ -112,14 +112,14 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
                     break
                     
         if not auth_passed:
-            client.sendall(b"HTTP/1.1 407 Proxy Authentication Required\\r\\nProxy-Authenticate: Basic realm=\\"Proxy\\"\\r\\n\\r\\n")
+            client.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Proxy\"\r\n\r\n")
             return
 
         method, target, version = lines[0].split(" ", 2)
         if method.upper() == "CONNECT":
             host, _, port_text = target.partition(":")
             upstream = create_connection((host, parse_int(port_text) or 443), timeout=20)
-            client.sendall(b"HTTP/1.1 200 Connection Established\\r\\n\\r\\n")
+            client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             if rest: upstream.sendall(rest)
             relay(client, upstream)
             return
@@ -128,7 +128,7 @@ def http_client(client: socket.socket, first_byte: bytes) -> None:
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         path = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
         headers = [line for line in lines[1:] if not line.lower().startswith(("proxy-connection:", "connection:", "proxy-authorization:"))]
-        request = f"{method} {path} {version}\\r\\n" + "\\r\\n".join(headers) + "\\r\\nConnection: close\\r\\n\\r\\n"
+        request = f"{method} {path} {version}\r\n" + "\r\n".join(headers) + "\r\nConnection: close\r\n\r\n"
         upstream = create_connection((parsed.hostname, port), timeout=20)
         upstream.sendall(request.encode("iso-8859-1") + rest)
         relay(client, upstream)
