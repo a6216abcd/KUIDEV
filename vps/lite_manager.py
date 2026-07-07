@@ -117,29 +117,29 @@ def update_config_loop():
             new_port = int(data.get("port", 7920))
             print(f"[cfg] 解析: country={desired_country}, port={new_port}, trigger={switch_trigger}, current_country={target_country}", flush=True)
                 
-                if new_port != PROXY_PORT:
-                    print(f"[*] 收到端口变更指令 ({PROXY_PORT} -> {new_port})，重启守护进程...", flush=True)
-                    os._exit(0)
-                
-                with state_lock:
-                    force_switch = (switch_trigger > last_switch_trigger)
-                    if target_country != desired_country or force_switch:
-                        target_country = desired_country
-                        if force_switch: print(f"[*] 收到强制更换指令，正在清退通道并拉黑当前 IP...", flush=True)
-                        else: print(f"[*] 策略热切换: 目标重定向到 {desired_country}...", flush=True)
-                        
-                        if tun_main.entry_ip: dead_ips.add(tun_main.entry_ip)
-                        if tun_main.process:
-                            try: tun_main.process.terminate(); tun_main.process.wait(2)
-                            except: tun_main.process.kill()
-                        tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""
-                        
-                        if tun_backup.process:
-                            try: tun_backup.process.terminate(); tun_backup.process.wait(2)
-                            except: tun_backup.process.kill()
-                        tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""
-                        
-                        last_switch_trigger = switch_trigger
+            if new_port != PROXY_PORT:
+                print(f"[*] 收到端口变更指令 ({PROXY_PORT} -> {new_port})，重启守护进程...", flush=True)
+                os._exit(0)
+            
+            with state_lock:
+                force_switch = (switch_trigger > last_switch_trigger)
+                if target_country != desired_country or force_switch:
+                    target_country = desired_country
+                    if force_switch: print(f"[*] 收到强制更换指令，正在清退通道并拉黑当前 IP...", flush=True)
+                    else: print(f"[*] 策略热切换: 目标重定向到 {desired_country}...", flush=True)
+                    
+                    if tun_main.entry_ip: dead_ips.add(tun_main.entry_ip)
+                    if tun_main.process:
+                        try: tun_main.process.terminate(); tun_main.process.wait(2)
+                        except: tun_main.process.kill()
+                    tun_main.ready = False; tun_main.process = None; tun_main.entry_ip = ""; tun_main.egress_ip = ""
+                    
+                    if tun_backup.process:
+                        try: tun_backup.process.terminate(); tun_backup.process.wait(2)
+                        except: tun_backup.process.kill()
+                    tun_backup.ready = False; tun_backup.process = None; tun_backup.entry_ip = ""; tun_backup.egress_ip = ""
+                    
+                    last_switch_trigger = switch_trigger
         except Exception as e:
             print(f"[cfg] 拉取配置失败: {e}", flush=True)
         time.sleep(15)
