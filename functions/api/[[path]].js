@@ -96,7 +96,7 @@ async function parseThirdPartySubscription(content) {
     }
     const lines = decoded.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const protocolCounts = {};
-    const debug = { totalLines: lines.length, matched: 0, hy2Found: false, hy2Count: 0, firstFewLines: [], hy2Line: '', allPrefixes: {}, unmatchedPrefixes: {} };
+    const debug = { totalLines: lines.length, matched: 0, hy2Found: false, hy2Count: 0, firstFewLines: [], hy2Line: '', allPrefixes: {}, unmatchedPrefixes: {}, contentPreview: decoded.substring(0, 800) };
     for (const raw of lines) {
         if (debug.firstFewLines.length < 5) debug.firstFewLines.push(raw.substring(0, 120));
         const rawLC = raw.toLowerCase();
