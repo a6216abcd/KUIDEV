@@ -1307,6 +1307,7 @@
                             if (data.debug) {
                                 const d = data.debug;
                                 if (d.protocolCounts) msg += `\n协议分布: ${JSON.stringify(d.protocolCounts)}`;
+                                if (d.debug && d.debug.allPrefixes) msg += `\n所有行前缀: ${JSON.stringify(d.debug.allPrefixes)}`;
                                 if (d.debug && d.debug.hy2Found && (!d.protocolCounts || !d.protocolCounts.Hysteria2)) {
                                     msg += `\n⚠️ 订阅中发现 hysteria2 行但解析失败！hy2原始行: ${d.debug.hy2Line || '(空)'}`;
                                 }
