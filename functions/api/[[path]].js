@@ -645,6 +645,32 @@ export async function onRequest(context) {
             }
         }
 
+        // --- 住宅IP代理 SOCKS5 节点整合进订阅 ---
+        try {
+            const proxyUser = env.PROXY_USER || 'proxy';
+            const proxyPass = env.PROXY_PASS || '888888';
+            const cutoff = Date.now() - 120000;
+            const { results: proxyServers } = await db.prepare('SELECT ip, details FROM proxy_ctrl_servers WHERE last_seen > ?').bind(cutoff).all();
+            if (proxyServers) {
+                for (const s of proxyServers) {
+                    let details = [];
+                    try { details = JSON.parse(s.details || '[]'); } catch(e) { continue; }
+                    for (const node of details) {
+                        if (!node.active) continue;
+                        const remark = `${node.country || 'XX'}_Resi_${node.node_ip || s.ip}`;
+                        const encRemark = encodeURIComponent(remark);
+                        const link = `socks5://${proxyUser}:${proxyPass}@${s.ip}:${node.port || 7920}#${encRemark}`;
+                        subLinks.push(link);
+                        if (format === 'clash') {
+                            const cProxy = `  - name: "${remark}"\n    type: socks5\n    server: ${s.ip}\n    port: ${node.port || 7920}\n    username: ${proxyUser}\n    password: ${proxyPass}\n    udp: true`;
+                            clashProxies.push(cProxy);
+                            proxyNames.push(`"${remark}"`);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
         // --- 若为 Clash 格式，渲染 YAML 返回 ---
         if (format === 'clash') {
             const proxyGroupList = proxyNames.length > 0 ? proxyNames.map(n => `      - ${n}`).join('\n') : '      - DIRECT';
