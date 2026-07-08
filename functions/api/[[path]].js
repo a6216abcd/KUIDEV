@@ -22,6 +22,22 @@ function base64ToUtf8(str) {
     }
 }
 
+function safeHashDecode(url) {
+    const raw = (url.hash && url.hash.slice(1)) || '';
+    if (!raw) return '';
+    try { return decodeURIComponent(raw); } catch (e) { return raw; }
+}
+
+function resolveUrlPortForHysteria2(url) {
+    if (url.port && String(url.port) !== '') return parseInt(url.port);
+    const insecure = (url.searchParams.get('insecure') || url.searchParams.get('allowinsecure') || '').toString();
+    const mbs = (url.searchParams.get('downmbps') || url.searchParams.get('upmbps') || '0').toString();
+    if (insecure === '1' || parseInt(mbs, 10) > 0) return 443;
+    const path = (url.pathname && url.pathname.replace(/^\//, '')) || '';
+    const p = parseInt(path, 10);
+    return Number.isFinite(p) && p > 0 ? p : 443;
+}
+
 async function parseThirdPartySubscription(content) {
     let nodes = [];
     let decoded = content;
@@ -36,6 +52,7 @@ async function parseThirdPartySubscription(content) {
     const lines = decoded.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     for (const raw of lines) {
         let node = null;
+        let parseError = null;
         try {
             if (raw.startsWith('vmess://')) {
                 const jsonStr = base64ToUtf8(raw.slice(8));
@@ -49,7 +66,7 @@ async function parseThirdPartySubscription(content) {
             } else if (raw.startsWith('vless://')) {
                 const url = new URL(raw);
                 node = {
-                    protocol: 'XTLS-Reality', name: decodeURIComponent(url.hash.slice(1) || ''), address: url.hostname, port: parseInt(url.port) || 443,
+                    protocol: 'XTLS-Reality', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
                     uuid: url.username, password: '', sni: url.searchParams.get('sni') || url.hostname,
                     public_key: url.searchParams.get('pbk') || '', short_id: url.searchParams.get('sid') || '',
                     flow: url.searchParams.get('flow') || '', network: (url.searchParams.get('type') || 'tcp').toLowerCase(),
@@ -58,28 +75,28 @@ async function parseThirdPartySubscription(content) {
             } else if (raw.startsWith('trojan://')) {
                 const url = new URL(raw);
                 node = {
-                    protocol: 'Trojan', name: decodeURIComponent(url.hash.slice(1) || ''), address: url.hostname, port: parseInt(url.port) || 443,
+                    protocol: 'Trojan', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
                     uuid: url.username, password: url.username, sni: url.searchParams.get('sni') || url.hostname,
                     public_key: '', short_id: '', flow: '', network: 'tcp', host: '', path: '', extra: '', enable: 1
                 };
             } else if (raw.startsWith('hysteria2://') || raw.startsWith('hy2://') || raw.startsWith('hysteria://')) {
                 const url = new URL(raw);
                 node = {
-                    protocol: 'Hysteria2', name: decodeURIComponent(url.hash.slice(1) || ''), address: url.hostname, port: parseInt(url.port) || 443,
+                    protocol: 'Hysteria2', name: safeHashDecode(url), address: url.hostname, port: resolveUrlPortForHysteria2(url),
                     uuid: url.username, password: url.username, sni: url.searchParams.get('sni') || url.hostname,
                     public_key: '', short_id: '', flow: '', network: 'udp', host: '', path: '', extra: '', enable: 1
                 };
             } else if (raw.startsWith('tuic://')) {
                 const url = new URL(raw);
                 node = {
-                    protocol: 'TUIC', name: decodeURIComponent(url.hash.slice(1) || ''), address: url.hostname, port: parseInt(url.port) || 443,
+                    protocol: 'TUIC', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
                     uuid: url.username, password: url.password || '', sni: url.searchParams.get('sni') || url.hostname,
                     public_key: '', short_id: '', flow: '', network: 'udp', host: '', path: '', extra: '', enable: 1
                 };
             } else if (raw.startsWith('naive+https://') || raw.startsWith('naive://')) {
                 const url = new URL(raw);
                 node = {
-                    protocol: 'Naive', name: decodeURIComponent(url.hash.slice(1) || ''), address: url.hostname, port: parseInt(url.port) || 443,
+                    protocol: 'Naive', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
                     uuid: url.username, password: url.password || '', sni: url.searchParams.get('sni') || url.hostname,
                     public_key: '', short_id: '', flow: '', network: 'tcp', host: '', path: '', extra: '', enable: 1
                 };
@@ -127,11 +144,14 @@ async function parseThirdPartySubscription(content) {
                 }
             }
         } catch (e) {
-            continue;
+            parseError = e;
+            node = null;
         }
         if (node && node.address && node.port) {
             node.id = crypto.randomUUID();
             nodes.push(node);
+        } else if (raw.startsWith('hysteria2://') || raw.startsWith('hy2://') || raw.startsWith('hysteria://')) {
+            console.error('[TP parse skip] HY2 failed:', parseError && parseError.message, 'line:', raw);
         }
     }
     return nodes;
