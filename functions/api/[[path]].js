@@ -879,7 +879,7 @@ export async function onRequest(context) {
             switch (node.protocol) {
                 case "VLESS": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&security=none&type=tcp#${remark}`; break;
                 case "XTLS-Reality": case "Reality": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=tcp&headerType=none#${remark}`; break;
-                case "Hysteria2": link = `hysteria2://${node.uuid || node.private_key}@${node.vps_ip}:${node.port}/?insecure=1&sni=${node.sni}&alpn=h3#${remark}`; break;
+                case "Hysteria2": link = `hysteria2://${encodeURIComponent(node.uuid || node.private_key)}@${node.vps_ip}:${node.port}/?insecure=1&sni=${encodeURIComponent(node.sni)}&alpn=h3#${remark}`; break;
                 case "TUIC": link = `tuic://${node.uuid}:${node.private_key}@${node.vps_ip}:${node.port}?sni=${node.sni}&congestion_control=bbr&alpn=h3&allow_insecure=1#${remark}`; break;
                 case "Trojan": link = `trojan://${node.private_key}@${node.vps_ip}:${node.port}?security=tls&sni=${node.sni}&allowInsecure=1&type=tcp#${remark}`; break;
                 case "H2-Reality": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=http#${remark}`; break;
@@ -940,7 +940,7 @@ export async function onRequest(context) {
                         break;
                     }
                     case "XTLS-Reality": case "Reality": link = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&flow=${node.flow||'xtls-rprx-vision'}&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id||""}&type=${node.network||'tcp'}${node.path?'&path='+encodeURIComponent(node.path):''}${node.host?'&host='+encodeURIComponent(node.host):''}#${remark}`; break;
-                    case "Hysteria2": link = `hysteria2://${node.uuid}@${node.address}:${node.port}/?insecure=1&sni=${node.sni}&alpn=h3#${remark}`; break;
+                    case "Hysteria2": link = `hysteria2://${encodeURIComponent(node.uuid || node.password)}@${node.address}:${node.port}/?insecure=1&sni=${encodeURIComponent(node.sni)}&alpn=h3#${remark}`; break;
                     case "TUIC": link = `tuic://${node.uuid}:${node.password}@${node.address}:${node.port}?sni=${node.sni}&congestion_control=bbr&alpn=h3&allow_insecure=1#${remark}`; break;
                     case "Trojan": link = `trojan://${node.password}@${node.address}:${node.port}?security=tls&sni=${node.sni}&allowInsecure=1&type=tcp#${remark}`; break;
                     case "H2-Reality": link = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=http#${remark}`; break;
@@ -983,7 +983,7 @@ export async function onRequest(context) {
                     } else if (node.protocol === "Trojan") {
                         cProxy = `  - name: "${node.name || 'TP'}"\n    type: trojan\n    server: ${node.address}\n    port: ${node.port}\n    password: ${node.password}\n    udp: true\n    sni: ${node.sni}\n    skip-cert-verify: true`;
                     } else if (node.protocol === "Hysteria2") {
-                        cProxy = `  - name: "${node.name || 'TP'}"\n    type: hysteria2\n    server: ${node.address}\n    port: ${node.port}\n    password: ${node.uuid}\n    sni: ${node.sni}\n    skip-cert-verify: true`;
+                        cProxy = `  - name: "${node.name || 'TP'}"\n    type: hysteria2\n    server: ${node.address}\n    port: ${node.port}\n    password: ${node.uuid || node.password}\n    sni: ${node.sni}\n    skip-cert-verify: true`;
                     } else if (node.protocol === "TUIC") {
                         cProxy = `  - name: "${node.name || 'TP'}"\n    type: tuic\n    server: ${node.address}\n    port: ${node.port}\n    uuid: ${node.uuid}\n    password: ${node.password}\n    sni: ${node.sni}\n    skip-cert-verify: true`;
                     }
