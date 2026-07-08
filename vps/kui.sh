@@ -78,7 +78,7 @@ case "$ARCH" in
     aarch64) SB_ARCH="arm64" ;;
     *) echo "不支持的 CPU 架构: $ARCH"; exit 1 ;;
 esac
-SB_VER="1.11.0"
+SB_VER="1.13.14"
 curl -sLo sing-box.tar.gz -A "$CURL_USER_AGENT" "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-linux-${SB_ARCH}.tar.gz"
 tar -xzf sing-box.tar.gz
 mv sing-box-${SB_VER}-linux-${SB_ARCH}/sing-box /usr/bin/
