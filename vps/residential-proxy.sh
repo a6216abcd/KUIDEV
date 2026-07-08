@@ -171,12 +171,10 @@ EOF
         systemctl enable proxy-lite.service
         systemctl restart proxy-lite.service
         echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量加载。"
-        ;;
-    *)
+    else
         echo "[*] 未检测到 systemd，跳过 systemd 服务安装"
         echo "    请手动启动: cd /opt/proxy_lite && python3 -u lite_manager.py"
-        ;;
-    esac
+    fi
 }
 
 main() {
