@@ -8,6 +8,39 @@ async function sha256(text) {
     return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function parseHysteria2Link(raw) {
+    try {
+        let rest = raw.slice(raw.startsWith('hy2://') ? 5 : raw.startsWith('hysteria://') ? 10 : 11);
+        const hashIdx = rest.indexOf('#');
+        let remark = '';
+        if (hashIdx !== -1) { remark = rest.slice(hashIdx + 1); rest = rest.slice(0, hashIdx); }
+        const qIdx = rest.indexOf('?');
+        let queryPart = '';
+        if (qIdx !== -1) { queryPart = rest.slice(qIdx + 1); rest = rest.slice(0, qIdx); }
+        const [userinfo, ...addrParts] = rest.split('@');
+        if (!userinfo || addrParts.length === 0) return null;
+        const password = decodeURIComponent(userinfo);
+        let host = addrParts.join('@');
+        let port = 443;
+        if (host.includes(':')) {
+            const idx = host.lastIndexOf(':');
+            const pStr = host.slice(idx + 1);
+            if (/^\d+$/.test(pStr)) { port = parseInt(pStr, 10); host = host.slice(0, idx); }
+        }
+        const params = new URLSearchParams(queryPart);
+        const sni = params.get('sni') || host;
+        const name = remark ? decodeURIComponent(remark) : '';
+        if (!host || !port) return null;
+        return {
+            protocol: 'Hysteria2', name, address: host, port, uuid: password, password, sni,
+            public_key: '', short_id: '', flow: '', network: 'udp', host: '', path: '', extra: '', enable: 1
+        };
+    } catch (e) {
+        console.error('[TP parse HY2 error]', e && e.message, 'line:', raw);
+        return null;
+    }
+}
+
 function base64ToUtf8(str) {
     try {
         const s = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -80,12 +113,8 @@ async function parseThirdPartySubscription(content) {
                     public_key: '', short_id: '', flow: '', network: 'tcp', host: '', path: '', extra: '', enable: 1
                 };
             } else if (raw.startsWith('hysteria2://') || raw.startsWith('hy2://') || raw.startsWith('hysteria://')) {
-                const url = new URL(raw);
-                node = {
-                    protocol: 'Hysteria2', name: safeHashDecode(url), address: url.hostname, port: resolveUrlPortForHysteria2(url),
-                    uuid: url.username, password: url.username, sni: url.searchParams.get('sni') || url.hostname,
-                    public_key: '', short_id: '', flow: '', network: 'udp', host: '', path: '', extra: '', enable: 1
-                };
+                const parsed = parseHysteria2Link(raw);
+                if (parsed) node = parsed;
             } else if (raw.startsWith('tuic://')) {
                 const url = new URL(raw);
                 node = {
