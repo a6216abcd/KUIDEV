@@ -1019,7 +1019,7 @@ rules:
                 await db.prepare("INSERT INTO third_party_subscriptions (id, name, url, added_at, last_fetched_at) VALUES (?, ?, ?, ?, ?)" ).bind(id, name || '第三方订阅', url, now, now).run();
                 let parsedCount = 0; let parseDebug = {};
                 try {
-                    const res = await fetch(url, { headers: { 'User-Agent': 'KUI-TP-Client/1.0' } });
+                    const res = await fetch(url, { headers: { 'User-Agent': 'v2rayN/6.44', 'Accept': '*/*' } });
                     const text = await res.text();
                     const result = await parseThirdPartySubscription(text);
                     const { nodes, protocolCounts, debug } = result;
