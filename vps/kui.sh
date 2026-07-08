@@ -88,6 +88,27 @@ if ! command -v sing-box >/dev/null 2>&1; then
     rm -rf sing-box.tar.gz sing-box-${SB_VER}-linux-${SB_ARCH}
 fi
 
+echo "[4.5/6] ⚙️ 正在应用网络内核调优（BBR / QUIC / conntrack）..."
+if [ "$OS" = "alpine" ]; then
+    modprobe -q xt_conntrack 2>/dev/null
+    sysctl -w net.netfilter.nf_conntrack_max=1048576 >/dev/null 2>&1
+else
+    cat > /etc/sysctl.d/99-kui-optimize.conf <<'SYSCTL'
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.netdev_max_backlog = 5000
+net.netfilter.nf_conntrack_max = 1048576
+net.netfilter.nf_conntrack_udp_timeout = 60
+net.netfilter.nf_conntrack_tcp_timeout_established = 7200
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+SYSCTL
+    sysctl --system >/dev/null 2>&1
+fi
+
 echo "[5/6] 📂 初始化 KUI 工作目录与环境..."
 mkdir -p /opt/kui /etc/sing-box
 
