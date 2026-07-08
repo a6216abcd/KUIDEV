@@ -116,9 +116,14 @@ def update_config_loop():
                     pp = str(pc.get("pass", "")) or os.environ.get("PROXY_PASS", "888888")
                     os.environ["PROXY_USER"] = pu
                     os.environ["PROXY_PASS"] = pp
-                    proxy_server.set_credentials(pu, pp)
-            except Exception:
-                pass
+                    if hasattr(proxy_server, "set_credentials"):
+                        proxy_server.set_credentials(pu, pp)
+                    else:
+                        proxy_server.PROXY_USER = pu.encode()
+                        proxy_server.PROXY_PASS = pp.encode()
+                    print(f"[cfg] 凭证同步: user={pu}, pass={'*' * len(pp)}", flush=True)
+            except Exception as e:
+                print(f"[cfg] 凭证同步失败: {e}", flush=True)
             print(f"[cfg] 解析: country={desired_country}, port={new_port}, trigger={switch_trigger}, current_country={target_country}", flush=True)
                 
             if new_port != PROXY_PORT:
