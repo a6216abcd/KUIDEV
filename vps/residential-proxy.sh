@@ -189,6 +189,13 @@ command="/usr/bin/python3"
 command_args="-u lite_manager.py"
 directory="/opt/proxy_lite"
 env_files="/etc/conf.d/proxy-lite"
+export C2_URL=${C2_URL:-https://YOUR_CONTROLLER_DOMAIN}
+export WEB_USER=${WEB_USER:-admin}
+export WEB_PASS=${WEB_PASS:-admin888}
+export PROXY_USER=${PROXY_USER:-proxy}
+export PROXY_PASS=${PROXY_PASS:-888888}
+export PYTHONIOENCODING=${PYTHONIOENCODING:-utf-8}
+export LANG=${LANG:-C.UTF-8}
 depend() {
     need net
     after firewall
