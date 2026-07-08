@@ -10,6 +10,7 @@ async function sha256(text) {
 
 function formatIpForLink(ip) {
     if (!ip || typeof ip !== 'string') return ip;
+    if (ip.startsWith('[') && ip.endsWith(']')) return ip;
     if (ip.includes(':')) return `[${ip}]`;
     return ip;
 }
@@ -958,18 +959,6 @@ export async function onRequest(context) {
                     case "AnyTLS": link = `anytls://${node.password}@${thirdIp}:${node.port}?security=tls&sni=${thirdSni}&insecure=1#${remark}`; break;
                     case "Naive": link = `naive+https://${node.uuid}:${node.password}@${thirdIp}:${node.port}?security=tls&sni=${thirdSni}#${remark}`; break;
                     case "Socks5": link = `socks5://${btoa(`${node.uuid}:${node.password}`)}@${thirdIp}:${node.port}#${remark}`; break;
-                }
-                        break;
-                    }
-                    case "XTLS-Reality": case "Reality": link = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&flow=${node.flow||'xtls-rprx-vision'}&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id||""}&type=${node.network||'tcp'}${node.path?'&path='+encodeURIComponent(node.path):''}${node.host?'&host='+encodeURIComponent(node.host):''}#${remark}`; break;
-                    case "Hysteria2": link = `hysteria2://${encodeURIComponent(node.uuid || node.password)}@${node.address}:${node.port}/?insecure=1&sni=${encodeURIComponent(node.sni)}&alpn=h3#${remark}`; break;
-                    case "TUIC": link = `tuic://${node.uuid}:${node.password}@${node.address}:${node.port}?sni=${node.sni}&congestion_control=bbr&alpn=h3&allow_insecure=1#${remark}`; break;
-                    case "Trojan": link = `trojan://${node.password}@${node.address}:${node.port}?security=tls&sni=${node.sni}&allowInsecure=1&type=tcp#${remark}`; break;
-                    case "H2-Reality": link = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=http#${remark}`; break;
-                    case "gRPC-Reality": link = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=grpc&serviceName=grpc#${remark}`; break;
-                    case "AnyTLS": link = `anytls://${node.password}@${node.address}:${node.port}?security=tls&sni=${node.sni}&insecure=1#${remark}`; break;
-                    case "Naive": link = `naive+https://${node.uuid}:${node.password}@${node.address}:${node.port}?security=tls&sni=${node.sni}#${remark}`; break;
-                    case "Socks5": link = `socks5://${btoa(`${node.uuid}:${node.password}`)}@${node.address}:${node.port}#${remark}`; break;
                 }
                 if (link) subLinks.push(link);
 
