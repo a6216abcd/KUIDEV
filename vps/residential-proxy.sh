@@ -90,7 +90,7 @@ install_dependencies() {
         apk)
             apk update || true
             apk add --no-cache \
-                openvpn python3 curl iproute2 iptables cron psmisc \
+                openvpn python3 curl iproute2 iptables dcron psmisc \
                 || { echo "❌ apk 依赖安装失败"; exit 1; }
             ;;
         yum|dnf)
