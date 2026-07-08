@@ -143,6 +143,10 @@ install_service() {
     echo "[3/4] 配置系统守护服务..."
 
     if [ "$INIT_SYS" = "systemd" ]; then
+        systemctl stop proxy-lite 2>/dev/null || true
+        systemctl disable proxy-lite 2>/dev/null || true
+        rm -f /lib/systemd/system/proxy-lite.service
+
         SERVICE_FILE="/lib/systemd/system/proxy-lite.service"
         cat > "$SERVICE_FILE" << EOF
 [Unit]
@@ -171,6 +175,10 @@ EOF
         systemctl restart proxy-lite.service
         echo "[+] 引擎更新成功！主备双活通道、异步刷IP逻辑已全量加载。"
     elif [ "$INIT_SYS" = "openrc" ]; then
+        rc-service proxy-lite stop 2>/dev/null || true
+        rc-update del proxy-lite default >/dev/null 2>&1 || true
+        rm -f /etc/init.d/proxy-lite /etc/conf.d/proxy-lite
+
         CONF_FILE="/etc/conf.d/proxy-lite"
         cat > "$CONF_FILE" << EOF
 C2_URL="${CONTROLLER}"
@@ -189,6 +197,10 @@ command="/usr/bin/python3"
 command_args="-u lite_manager.py"
 directory="/opt/proxy_lite"
 env_files="/etc/conf.d/proxy-lite"
+pre_start() {
+    [ -f /etc/conf.d/proxy-lite ] && . /etc/conf.d/proxy-lite
+    export C2_URL WEB_USER WEB_PASS PROXY_USER PROXY_PASS PYTHONIOENCODING LANG
+}
 depend() {
     need net
     after firewall
@@ -220,6 +232,10 @@ EOF
 }
 
 main() {
+    pkill -f "python3 -u lite_manager.py" >/dev/null 2>&1 || true
+    pkill -f "openvpn.*tun_main|tun_backup" >/dev/null 2>&1 || true
+    rm -f /opt/proxy_lite/lite_manager.py /opt/proxy_lite/proxy_server.py /opt/proxy_lite/run.sh
+
     install_dependencies
     setup_sysctl
     download_agents
