@@ -1310,6 +1310,9 @@
                                 if (d.debug && d.debug.hy2Found && (!d.protocolCounts || !d.protocolCounts.Hysteria2)) {
                                     msg += `\n⚠️ 订阅中发现 hysteria2 行但解析失败！hy2原始行: ${d.debug.hy2Line || '(空)'}`;
                                 }
+                                if (d.debug && d.debug.unmatchedPrefixes && Object.keys(d.debug.unmatchedPrefixes).length > 0) {
+                                    msg += `\n⚠️ 未匹配行的前缀分布: ${JSON.stringify(d.debug.unmatchedPrefixes)}`;
+                                }
                                 if (d.fetchError) msg += `\n❌ 拉取订阅失败: ${d.fetchError}`;
                             }
                             alert(msg);
