@@ -598,7 +598,7 @@ export async function onRequest(context) {
                 case "Hysteria2": link = `hysteria2://${node.uuid}@${node.vps_ip}:${node.port}/?insecure=1&sni=${node.sni}&alpn=h3#${remark}`; break;
                 case "TUIC": link = `tuic://${node.uuid}:${node.private_key}@${node.vps_ip}:${node.port}?sni=${node.sni}&congestion_control=bbr&alpn=h3&allow_insecure=1#${remark}`; break;
                 case "Trojan": link = `trojan://${node.private_key}@${node.vps_ip}:${node.port}?security=tls&sni=${node.sni}&allowInsecure=1&type=tcp#${remark}`; break;
-                case "H2-Reality": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=http#${remark}`; break;
+                case "H2-Reality": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=h2#${remark}`; break;
                 case "gRPC-Reality": link = `vless://${node.uuid}@${node.vps_ip}:${node.port}?encryption=none&security=reality&sni=${node.sni}&fp=chrome&pbk=${node.public_key}&sid=${node.short_id || ""}&type=grpc&serviceName=grpc#${remark}`; break;
                 case "AnyTLS": link = `anytls://${node.private_key}@${node.vps_ip}:${node.port}?security=tls&sni=${node.sni}&insecure=1#${remark}`; break;
                 case "Naive": link = `naive+https://${node.uuid}:${node.private_key}@${node.vps_ip}:${node.port}?security=tls&sni=${node.sni}#${remark}`; break;
