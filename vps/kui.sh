@@ -65,10 +65,10 @@ echo "[3/6] 📦 正在安装底层网络依赖..."
 if [ "$OS" = "alpine" ]; then
     apk update
     apk add python3 curl openssl iptables ip6tables coreutils bash tar libc6-compat gcompat iproute2
-else
+    else
     apt-get update -y
-    apt-get install -y python3 curl openssl iptables coreutils bash tar iproute2 iputils-ping
-fi
+    apt-get install -y python3 curl openssl iptables ip6tables coreutils bash tar iproute2 iputils-ping
+    fi
 
 echo "[4/6] ⚙️ 部署 Sing-box 代理核心..."
 if ! command -v sing-box >/dev/null 2>&1; then
