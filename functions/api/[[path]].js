@@ -883,6 +883,16 @@ export async function onRequest(context) {
                     case "Socks5": link = `socks5://${btoa(`${node.uuid}:${node.password}`)}@${node.address}:${node.port}#${remark}`; break;
                 }
                 if (link) subLinks.push(link);
+                if (node.protocol === 'VMess' && node.uuid && node.address) {
+                    const vRemark = encodeURIComponent(`${node.name||'TP'}_VLESS_${node.port}`);
+                    const vLink = `vless://${node.uuid}@${node.address}:${node.port}?encryption=none&security=tls&sni=${node.sni}&fp=chrome&type=${node.network||'tcp'}${node.path?'&path='+encodeURIComponent(node.path):''}${node.host?'&host='+encodeURIComponent(node.host):''}#${vRemark}`;
+                    subLinks.push(vLink);
+                    if (format === 'clash') {
+                        const vCProxy = `  - name: "${node.name||'TP'} [VLESS]"\n    type: vless\n    server: ${node.address}\n    port: ${node.port}\n    uuid: ${node.uuid}\n    udp: true\n    tls: true\n    servername: ${node.sni}\n    client-fingerprint: chrome${node.network&&node.network!=='tcp'?`\n    network: ${node.network}`:''}`;
+                        clashProxies.push(vCProxy);
+                        proxyNames.push(`"${node.name||'TP'} [VLESS]"`);
+                    }
+                }
 
                 if (format === 'clash') {
                     let cProxy = "";
