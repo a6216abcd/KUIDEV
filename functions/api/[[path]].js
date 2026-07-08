@@ -8,6 +8,61 @@ async function sha256(text) {
     return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function parseVLESSLink(raw) {
+    try {
+        const schemeSep = raw.indexOf('://');
+        if (schemeSep < 0) return null;
+        let rest = raw.slice(schemeSep + 3);
+        const hashIdx = rest.indexOf('#');
+        let remark = '', hash = '';
+        if (hashIdx !== -1) { hash = rest.slice(hashIdx + 1); rest = rest.slice(0, hashIdx); }
+        const qIdx = rest.indexOf('?');
+        let queryPart = '';
+        if (qIdx !== -1) { queryPart = rest.slice(qIdx + 1); rest = rest.slice(0, qIdx); }
+        const atIdx = rest.lastIndexOf('@');
+        if (atIdx < 0) return null;
+        const uuid = rest.slice(0, atIdx);
+        let hostPart = rest.slice(atIdx + 1);
+        let port = 443;
+        if (hostPart.startsWith('[')) {
+            const bracketEnd = hostPart.indexOf(']');
+            if (bracketEnd < 0) return null;
+            const ipv6Addr = hostPart.slice(0, bracketEnd + 1);
+            const afterBracket = hostPart.slice(bracketEnd + 1);
+            if (afterBracket.startsWith(':')) {
+                const portMatch = afterBracket.slice(1).match(/^\d+/);
+                if (portMatch) port = parseInt(portMatch[0], 10);
+            }
+            hostPart = ipv6Addr;
+        } else {
+            let hostWithoutPort = hostPart;
+            const colonIdx = hostPart.lastIndexOf(':');
+            if (colonIdx > 0 && !hostPart.slice(0, colonIdx).includes(':')) {
+                const pStr = hostPart.slice(colonIdx + 1);
+                if (/^\d+$/.test(pStr)) {
+                    port = parseInt(pStr, 10);
+                    hostWithoutPort = hostPart.slice(0, colonIdx);
+                }
+            }
+            hostPart = hostWithoutPort;
+        }
+        const params = new URLSearchParams(queryPart);
+        const pbk = params.get('pbk') || '';
+        const sid = params.get('sid') || '';
+        const sni = params.get('sni') || hostPart;
+        const flow = params.get('flow') || '';
+        const network = params.get('type') || 'tcp';
+        const host = params.get('host') || '';
+        const path = params.get('path') || '';
+        const name = hash ? (() => { try { return decodeURIComponent(hash); } catch(e) { return hash; } })() : '';
+        if (!uuid || !hostPart) return null;
+        return {
+            protocol: 'VLESS', name, address: hostPart, port, uuid, password: '', sni,
+            public_key: pbk, short_id: sid, flow, network: network.toLowerCase(), host, path, extra: '', enable: 1
+        };
+    } catch (e) { return null; }
+}
+
 function parseHysteria2Link(raw) {
     try {
         let prefixLen = 11;
@@ -123,21 +178,11 @@ async function parseThirdPartySubscription(content) {
                     node.network = (obj.net || 'tcp').toLowerCase(); node.host = obj.host || ''; node.path = obj.path || '';
                 } catch (e) {}
             } else if (rawLC.startsWith('vless://')) {
-                const url = new URL(raw);
-                node = {
-                    protocol: 'VLESS', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
-                    uuid: url.username, password: '', sni: url.searchParams.get('sni') || url.hostname,
-                    public_key: url.searchParams.get('pbk') || '', short_id: url.searchParams.get('sid') || '',
-                    flow: url.searchParams.get('flow') || '', network: (url.searchParams.get('type') || 'tcp').toLowerCase(),
-                    host: url.searchParams.get('host') || '', path: url.searchParams.get('path') || '', extra: '', enable: 1
-                };
+                const parsed = parseVLESSLink(raw);
+                if (parsed) node = parsed;
             } else if (rawLC.startsWith('trojan://')) {
-                const url = new URL(raw);
-                node = {
-                    protocol: 'Trojan', name: safeHashDecode(url), address: url.hostname, port: parseInt(url.port) || 443,
-                    uuid: url.username, password: url.username, sni: url.searchParams.get('sni') || url.hostname,
-                    public_key: '', short_id: '', flow: '', network: 'tcp', host: '', path: '', extra: '', enable: 1
-                };
+                const parsed = parseVLESSLink(raw);
+                if (parsed) { parsed.protocol = 'Trojan'; node = parsed; }
             } else if (rawLC.startsWith('hysteria2://') || rawLC.startsWith('hy2://') || rawLC.startsWith('hysteria://')) {
                 const parsed = parseHysteria2Link(raw);
                 if (parsed) node = parsed;
