@@ -426,7 +426,7 @@
                                 <select v-model="newNodeParams[vps.ip].username" class="w-full border-none bg-indigo-50/50 text-indigo-700 font-bold text-sm p-3 rounded-xl outline-none mb-3"><option value="admin">👤 归属权: 管理员自身</option><option v-for="u in users" :value="u.username">👤 归属权: {{ u.username }}</option></select>
                                 <div class="flex gap-3 mb-3">
                                     <select v-model="newNodeParams[vps.ip].protocol" class="border-none bg-slate-100/50 text-slate-700 text-sm p-3 rounded-xl flex-1 outline-none font-medium"><option value="XTLS-Reality">XTLS + Reality</option><option value="Hysteria2">Hysteria2 (极速)</option><option value="TUIC">TUIC v5 (高并发)</option><option value="Trojan">Trojan</option><option value="H2-Reality">H2 + Reality</option><option value="gRPC-Reality">gRPC + Reality</option><option value="AnyTLS">AnyTLS</option><option value="Naive">Naive</option><option disabled>──────────</option><option value="VLESS-Argo">VLESS Argo (IP被封)</option><option value="dokodemo-door">Dokodemo (内部转发)</option></select>
-                                    <input v-model="newNodeParams[vps.ip].port" type="number" placeholder="端口" class="bg-slate-100/50 text-slate-700 text-sm p-3 rounded-xl w-24 outline-none font-mono">
+                                    <input v-model="newNodeParams[vps.ip].port" type="text" placeholder="端口 (单: 443 / 范围: 20000-21000)" class="bg-slate-100/50 text-slate-700 text-sm p-3 rounded-xl w-32 outline-none font-mono">
                                 </div>
                                 <div class="grid grid-cols-2 gap-3 mb-3">
                                     <div class="bg-slate-100/50 p-3 rounded-xl"><label class="block text-[10px] text-slate-400 font-bold mb-1">配额(GB, 0无限)</label><input v-model="newNodeParams[vps.ip].traffic_limit_gb" type="number" class="w-full text-sm bg-transparent outline-none font-bold text-slate-700"></div>
@@ -1235,10 +1235,31 @@
 
                 const addNode = async (ip) => {
                     const p = newNodeParams[ip]; if(!p.port) return alert('请填写端口!');
+                    const rawPort = String(p.port).trim(); let ports = [];
+                    const rangeMatch = rawPort.match(/^(\d+)[-:](\d+)$/);
+                    if (rangeMatch) {
+                        let start = parseInt(rangeMatch[1], 10), end = parseInt(rangeMatch[2], 10);
+                        if (start < 1 || start > 65535 || end < 1 || end > 65535 || start > end) return alert('端口范围无效，请输入 1-65535 之间的有效范围');
+                        if (end - start > 1000) return alert('单次端口范围不能超过 1000 个端口');
+                        for (let port = start; port <= end; port++) ports.push(port);
+                    } else if (/^\d+$/.test(rawPort)) {
+                        let port = parseInt(rawPort, 10); if (port < 1 || port > 65535) return alert('端口必须在 1-65535 之间'); ports.push(port);
+                    } else { return alert('端口格式错误！支持单个端口(如 443)或范围(如 20000-21000)'); }
                     let limitBytes = p.traffic_limit_gb ? Math.floor(parseFloat(p.traffic_limit_gb) * 1073741824) : 0; let expireTs = p.expire_date ? new Date(p.expire_date).getTime() : 0;
-                    const payload = { id: Date.now().toString(), uuid: crypto.randomUUID(), vps_ip: ip, protocol: p.protocol, port: p.port, username: p.username, traffic_limit: limitBytes, expire_time: expireTs, sni: p.sni || '' };
-                    if (['XTLS-Reality', 'H2-Reality', 'gRPC-Reality'].includes(p.protocol)) { const keys = generateRealityKeys(); payload.private_key = keys.privateKey; payload.public_key = keys.publicKey; payload.short_id = keys.shortId; } else if (p.protocol === 'TUIC') { if (!p.sni) return alert('TUIC 必填 SNI！'); payload.private_key = crypto.randomUUID().replace(/-/g, ''); } else if (p.protocol === 'Trojan' || p.protocol === 'AnyTLS') { const array = new Uint8Array(16); crypto.getRandomValues(array); payload.private_key = btoa(String.fromCharCode.apply(null, array)); } else if (p.protocol === 'Naive') { payload.uuid = crypto.randomUUID().replace(/-/g, '').substring(0, 16); payload.private_key = payload.uuid; } else if (p.protocol === 'VLESS-Argo') { payload.sni = '⏳ 正在等待 VPS 自动回传穿透域名...'; } else if (p.protocol === 'dokodemo-door') { payload.relay_type = p.relay_type; if (p.relay_type === 'external') { payload.target_ip = p.target_ip; payload.target_port = p.target_port; } else { payload.target_id = p.target_id; } }
-                    await fetchApi('/api/nodes', { method: 'POST', body: JSON.stringify(payload) }); refreshData();
+                    let keys = null;
+                    if (['XTLS-Reality', 'H2-Reality', 'gRPC-Reality'].includes(p.protocol)) keys = generateRealityKeys();
+                    else if (p.protocol === 'TUIC') { if (!p.sni) return alert('TUIC 必填 SNI！'); }
+                    for (const port of ports) {
+                        const payload = { id: Date.now().toString() + Math.floor(Math.random() * 10000), uuid: crypto.randomUUID(), vps_ip: ip, protocol: p.protocol, port: port, username: p.username, traffic_limit: limitBytes, expire_time: expireTs, sni: p.sni || '' };
+                        if (keys) { payload.private_key = keys.privateKey; payload.public_key = keys.publicKey; payload.short_id = keys.shortId; }
+                        else if (p.protocol === 'TUIC') { payload.private_key = crypto.randomUUID().replace(/-/g, ''); }
+                        else if (p.protocol === 'Trojan' || p.protocol === 'AnyTLS') { const array = new Uint8Array(16); crypto.getRandomValues(array); payload.private_key = btoa(String.fromCharCode.apply(null, array)); }
+                        else if (p.protocol === 'Naive') { payload.uuid = crypto.randomUUID().replace(/-/g, '').substring(0, 16); payload.private_key = payload.uuid; }
+                        else if (p.protocol === 'VLESS-Argo') { payload.sni = '⏳ 正在等待 VPS 自动回传穿透域名...'; }
+                        else if (p.protocol === 'dokodemo-door') { payload.relay_type = p.relay_type; if (p.relay_type === 'external') { payload.target_ip = p.target_ip; payload.target_port = p.target_port; } else { payload.target_id = p.target_id; } }
+                        await fetchApi('/api/nodes', { method: 'POST', body: JSON.stringify(payload) });
+                    }
+                    refreshData();
                 };
                 
                 const deployAllProtocols = async (ip) => {
