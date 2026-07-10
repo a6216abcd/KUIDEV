@@ -55,20 +55,52 @@ echo "[2/6] ⚡ 正在强制配置阿里云镜像源..."
 if [ "$OS" = "alpine" ]; then
     sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 else
-    [ -f /etc/apt/sources.list ] && sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
-    [ -f /etc/apt/sources.list ] && sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
-    [ -f /etc/apt/sources.list ] && sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-    [ -f /etc/apt/sources.list ] && sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+    if [ -f /etc/apt/sources.list ]; then
+        mv /etc/apt/sources.list /etc/apt/sources.list.bak
+    fi
+    case "$OS" in
+        debian)
+            DEB_VERSION="$(awk -F'[= ]' '/VERSION_CODENAME/{print $NF}' /etc/os-release 2>/dev/null || echo bookworm)"
+            cat > /etc/apt/sources.list <<EOF
+deb http://mirrors.aliyun.com/debian ${DEB_VERSION} main contrib non-free non-free-firmware
+deb http://mirrors.aliyun.com/debian ${DEB_VERSION}-updates main contrib non-free non-free-firmware
+deb http://mirrors.aliyun.com/debian-security ${DEB_VERSION}-security main contrib non-free non-free-firmware
+EOF
+            ;;
+        ubuntu)
+            UBUNTU_CODENAME="$(awk -F'[= ]' '/VERSION_CODENAME/{print $NF}' /etc/os-release 2>/dev/null || echo jammy)"
+            cat > /etc/apt/sources.list <<EOF
+deb http://mirrors.aliyun.com/ubuntu ${UBUNTU_CODENAME} main restricted universe multiverse
+deb http://mirrors.aliyun.com/ubuntu ${UBUNTU_CODENAME}-updates main restricted universe multiverse
+deb http://mirrors.aliyun.com/ubuntu ${UBUNTU_CODENAME}-security main restricted universe multiverse
+EOF
+            ;;
+        *)
+            [ -f /etc/apt/sources.list.bak ] && mv /etc/apt/sources.list.bak /etc/apt/sources.list
+            ;;
+    esac
+    [ -d /etc/apt/sources.list.d ] && rm -f /etc/apt/sources.list.d/*.list
 fi
 
 echo "[3/6] 📦 正在安装底层网络依赖..."
+ALIYUN_OK=0
 if [ "$OS" = "alpine" ]; then
-    apk update
-    apk add python3 curl openssl iptables ip6tables coreutils bash tar libc6-compat gcompat iproute2
+    apk update && apk add python3 curl openssl iptables ip6tables coreutils bash tar libc6-compat gcompat iproute2 && ALIYUN_OK=1 || true
+else
+    if apt-get update -y 2>&1 | tee /tmp/kui_apt_update.log; then
+        ALIYUN_OK=1
     else
-    apt-get update -y
-    apt-get install -y python3 curl openssl iptables coreutils bash tar iproute2 iputils-ping
+        echo "⚠️  aliyun 源 apt-get update 失败，回滚到原 sources.list..."
+        if [ -f /etc/apt/sources.list.bak ]; then
+            mv /etc/apt/sources.list.bak /etc/apt/sources.list
+            apt-get update -y || echo "❌ 原 sources.list 也无法更新，请手动检查网络/源配置。"
+        else
+            echo "❌ 无备份可回滚，请手动修复 /etc/apt/sources.list 或更换镜像源后重试。"
+        fi
+        exit 1
     fi
+    apt-get install -y python3 curl openssl iptables coreutils bash tar iproute2 iputils-ping
+fi
 
 echo "[4/6] ⚙️ 部署 Sing-box 代理核心..."
 rm -f /usr/bin/sing-box
