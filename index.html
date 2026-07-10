@@ -27,21 +27,26 @@
         input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4); }
 
         /* ================= 探针前台大盘核心样式 ================= */
-        .probe-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: transparent; color: #333; margin: 0; padding: 20px; transition: all 0.3s; min-height: 100vh;}
+        .probe-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: transparent; color: #333; margin: 0; padding: 12px; transition: all 0.3s; min-height: 100vh;}
+        @media (min-width: 640px) { .probe-body { padding: 20px; } }
         body:not(.theme6) .probe-body { background-color: #f4f5f7; }
         
-        .probe-container { max-width: 1200px; margin: 0 auto; }
+        .probe-container { max-width: 1200px; margin: 0 auto; padding: 0 4px; }
+        @media (min-width: 640px) { .probe-container { padding: 0; } }
         .probe-global-stats { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); margin-bottom: 30px; text-align: center; }
         .probe-g-item { flex: 1; min-width: 200px; }
         .probe-g-val { font-size: 24px; font-weight: bold; color: #111; margin: 8px 0; }
         .probe-g-label { font-size: 13px; color: #666; }
         .probe-g-sub { font-size: 12px; color: #999; }
         .probe-group-header { font-size: 18px; font-weight: 600; color: #444; margin: 25px 0 15px 5px; border-left: 4px solid #3b82f6; padding-left: 10px; }
-        .probe-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 15px; }
+         .probe-grid-container { display: grid; grid-template-columns: 1fr; gap: 15px; }
+         @media (min-width: 640px) { .probe-grid-container { grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); } }
         
-        .probe-vps-card { display: flex; justify-content: space-between; align-items: stretch; background: white; padding: 18px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); text-decoration: none; color: inherit; border: 1px solid transparent; transition: all 0.2s ease; cursor: pointer;}
+         .probe-vps-card { display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; background: white; padding: 18px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); text-decoration: none; color: inherit; border: 1px solid transparent; transition: all 0.2s ease; cursor: pointer;}
+         @media (min-width: 640px) { .probe-vps-card { flex-direction: row; } }
         .probe-vps-card:hover { border-color: #e5e7eb; transform: translateY(-2px); box-shadow: 0 8px 15px rgba(0,0,0,0.08); }
-        .probe-card-left { flex: 0 0 180px; display: flex; flex-direction: column; justify-content: center; }
+         .probe-card-left { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+         @media (min-width: 640px) { .probe-card-left { flex: 0 0 180px; } }
         .probe-card-title { display: flex; align-items: center; margin-bottom: 4px; font-weight: 600; }
         .probe-status-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink:0; }
         .probe-card-meta { font-size: 12px; color: #6b7280; margin-bottom: 3px; }
@@ -50,7 +55,8 @@
         .probe-badge-bw { background: #3b82f6; } .probe-badge-tf { background: #10b981; } .probe-badge-v4 { background: #a855f7; } .probe-badge-v6 { background: #ec4899; }
         .probe-ping-box { font-size:11px; margin-top:10px; display:flex; gap:10px; padding: 6px 8px; border-radius: 4px; flex-wrap:wrap; background: rgba(150,150,150,0.1); border: 1px solid rgba(150,150,150,0.2); }
         
-        .probe-card-right { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-left: 15px; border-left: 1px solid rgba(150,150,150,0.1); min-width: 0; }
+         .probe-card-right { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-left: 0; border-left: none; min-width: 0; border-top: 1px solid rgba(150,150,150,0.1); }
+         @media (min-width: 640px) { .probe-card-right { padding-left: 15px; border-left: 1px solid rgba(150,150,150,0.1); border-top: none; } }
         .probe-stat-group { display: flex; flex-direction: column; margin-bottom: 8px; }
         .probe-stat-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: inherit; }
         .probe-stat-bar-full { width: 100%; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
@@ -72,13 +78,15 @@
         .probe-filter-tag.active { background: #3b82f6; color: white; }
 
         /* Map */
-        #probe-map-container { width: 100%; height: 500px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; border: 1px solid #e5e7eb; background-color: #b1c2d4; background-image: linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 20px 20px; z-index: 1;}
+         #probe-map-container { width: 100%; height: 500px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; border: 1px solid #e5e7eb; background-color: #b1c2d4; background-image: linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 20px 20px; z-index: 1;}
+         @media (max-width: 640px) { #probe-map-container { height: 300px; } }
         .probe-custom-map-badge div { background-color: #10b981; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
 
         /* Detail View */
         .probe-header-card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .probe-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; font-size: 14px; }
-        .probe-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+         .probe-charts-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+         @media (min-width: 768px) { .probe-charts-grid { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); } }
         .probe-chart-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .probe-chart-card canvas { max-height: 150px; }
         .probe-chart-full { grid-column: 1 / -1; }
@@ -151,8 +159,8 @@
     <div id="app" v-cloak>
         <div v-if="!isLoggedIn || activeTab === 'probe'" class="probe-body">
             
-            <div v-if="showLoginModal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center">
-                <div class="bg-white/80 backdrop-blur-xl border border-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-sm relative">
+            <div v-if="showLoginModal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+                <div class="bg-white/80 backdrop-blur-xl border border-white p-6 sm:p-10 rounded-[2rem] shadow-2xl w-full max-w-sm relative">
                     <button @click="showLoginModal = false" class="absolute top-4 right-5 text-2xl text-slate-400 hover:text-slate-600">&times;</button>
                     <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-6 shadow-lg flex items-center justify-center"><span class="text-white text-3xl">✨</span></div>
                     <h2 class="text-3xl font-black mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">系统准入</h2>
@@ -163,14 +171,14 @@
             </div>
 
             <div v-if="showWelcomePopup && probeSys.enable_popup === 'true'" class="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                <div class="bg-white rounded-[2rem] p-8 shadow-2xl w-full max-w-lg relative text-center">
+                <div class="bg-white rounded-[2rem] p-6 sm:p-8 shadow-2xl w-full max-w-lg relative text-center">
                     <div class="text-left leading-relaxed text-[15px] max-h-[60vh] overflow-y-auto text-slate-700" v-html="probeSys.popup_content"></div>
                     <button @click="closePopup" class="mt-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 active:scale-95 transition-all">我已知晓</button>
                 </div>
             </div>
 
             <div class="probe-container">
-                <div class="flex justify-between items-center mb-8 flex-wrap gap-4 header">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 header">
                     <h1 class="text-2xl font-black m-0 flex items-center gap-3">
                         <span v-if="probeDetailId" @click="probeDetailId = null" class="cursor-pointer text-blue-500 hover:underline text-sm font-medium">⬅ 返回</span>
                         {{ probeSys.site_title || 'Server Monitor Pro' }}
@@ -190,7 +198,7 @@
                 <div v-if="probeDetailId">
                     <div class="probe-header-card header-card">
                         <div class="flex items-center mb-4">
-                            <h2 class="text-2xl font-black m-0 mr-3 flex items-center card-title-text">
+                            <h2 class="text-xl sm:text-2xl font-black m-0 mr-3 flex items-center card-title-text">
                                 <img v-if="probeDetail.country && probeDetail.country !== 'XX'" :src="'https://flagcdn.com/24x18/' + probeDetail.country.toLowerCase() + '.png'" class="mr-2 rounded-sm">{{ probeDetail.name }}
                             </h2>
                             <span class="px-2.5 py-1 rounded-full text-xs font-bold text-white" :style="{background: isOnline(probeDetail.last_updated) ? '#10b981' : '#ef4444'}">{{ isOnline(probeDetail.last_updated) ? '在线' : '离线' }}</span>
@@ -234,9 +242,9 @@
                     </div>
 
                     <div class="probe-global-stats global-stats">
-                        <div class="probe-g-item g-item"><div class="probe-g-label g-label">服务器总数</div><div class="probe-g-val g-val">{{ publicProbeServers.length }}</div><div class="probe-g-sub g-sub">在线 <span class="text-emerald-500">{{ probeGlobalOnline }}</span> | 离线 <span class="text-red-500">{{ probeGlobalOffline }}</span></div></div>
-                        <div class="probe-g-item g-item"><div class="probe-g-label g-label">总计流量 (入 | 出) <span v-if="probeSys.auto_reset_traffic==='true'" class="text-[10px] text-orange-600">(按期重置)</span></div><div class="probe-g-val g-val">{{ formatBytes(probeGlobalNetRx) }} | {{ formatBytes(probeGlobalNetTx) }}</div></div>
-                        <div class="probe-g-item g-item"><div class="probe-g-label g-label">实时网速 (入 | 出)</div><div class="probe-g-val g-val"><span class="text-emerald-500">↓</span> {{ formatBytes(probeGlobalSpeedIn) }}/s | <span class="text-blue-500">↑</span> {{ formatBytes(probeGlobalSpeedOut) }}/s</div></div>
+                        <div class="probe-g-item g-item w-full sm:w-auto"><div class="probe-g-label g-label">服务器总数</div><div class="probe-g-val g-val">{{ publicProbeServers.length }}</div><div class="probe-g-sub g-sub">在线 <span class="text-emerald-500">{{ probeGlobalOnline }}</span> | 离线 <span class="text-red-500">{{ probeGlobalOffline }}</span></div></div>
+                        <div class="probe-g-item g-item w-full sm:w-auto"><div class="probe-g-label g-label">总计流量 (入 | 出) <span v-if="probeSys.auto_reset_traffic==='true'" class="text-[10px] text-orange-600">(按期重置)</span></div><div class="probe-g-val g-val">{{ formatBytes(probeGlobalNetRx) }} | {{ formatBytes(probeGlobalNetTx) }}</div></div>
+                        <div class="probe-g-item g-item w-full sm:w-auto"><div class="probe-g-label g-label">实时网速 (入 | 出)</div><div class="probe-g-val g-val"><span class="text-emerald-500">↓</span> {{ formatBytes(probeGlobalSpeedIn) }}/s | <span class="text-blue-500">↑</span> {{ formatBytes(probeGlobalSpeedOut) }}/s</div></div>
                     </div>
 
                     <div v-if="probeView === 'card'">
@@ -400,7 +408,7 @@
                                 <button @click="deleteVps(vps.ip)" class="text-slate-300 hover:text-rose-500 font-bold transition-all">彻底移除</button>
                             </div>
                             <div class="flex justify-between text-[10px] text-slate-400 font-mono font-black mb-4 px-1 uppercase tracking-wider"><span>UP: {{ vps.uptime || 'N/A' }}</span><span>LOAD: {{ vps.load || '0.00' }}</span></div>
-                            <div class="grid grid-cols-4 gap-2 mb-6">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
                                 <div class="bg-white/50 p-3 rounded-2xl border border-white shadow-sm flex flex-col justify-between"><div class="text-[9px] text-slate-400 font-bold tracking-wider mb-1">CPU</div><div class="font-black text-lg text-slate-700">{{ vps.cpu || 0 }}%</div><div class="w-full bg-slate-200/50 rounded-full h-1 mt-1 overflow-hidden"><div class="bg-indigo-400 h-1 rounded-full" :style="{ width: (vps.cpu || 0) + '%' }"></div></div></div>
                                 <div class="bg-white/50 p-3 rounded-2xl border border-white shadow-sm flex flex-col justify-between"><div class="text-[9px] text-slate-400 font-bold tracking-wider mb-1">MEM</div><div class="font-black text-lg text-slate-700">{{ vps.mem || 0 }}%</div><div class="w-full bg-slate-200/50 rounded-full h-1 mt-1 overflow-hidden"><div class="bg-purple-400 h-1 rounded-full" :style="{ width: (vps.mem || 0) + '%' }"></div></div></div>
                                 <div class="bg-white/50 p-3 rounded-2xl border border-white shadow-sm flex flex-col justify-between"><div class="text-[9px] text-slate-400 font-bold tracking-wider mb-1">DISK</div><div class="font-black text-lg text-slate-700">{{ vps.disk || 0 }}%</div><div class="w-full bg-slate-200/50 rounded-full h-1 mt-1 overflow-hidden"><div class="bg-emerald-400 h-1 rounded-full" :style="{ width: (vps.disk || 0) + '%' }"></div></div></div>
