@@ -1,3 +1,20 @@
+## 🌟 项目赞助商 (Sponsor)
+
+<p align="center">
+  <a href="https://derouter.ai/" target="_blank">
+    <b>DeRouter</b> — 基于区块链的纯正透明大模型 API 网关
+  </a>
+</p>
+
+**DeRouter** 通过区块链技术保证 Claude、GPT 官方 API 的**纯正与透明**，杜绝掺水降智问题。目前 Claude、GPT 在能力上仍领先国内大模型。
+
+- 🔗 官网：https://derouter.ai/
+- 🐦 Twitter：https://x.com/derouter_net
+- 💰 **有多余的 Claude 账号**：可托管到平台赚取收益
+- ⚡ **有 API 需求**：可使用其平台，价格为官方 API 的 **1-2 折**
+
+---
+
 DEV修复情况
 
 2026/07/10  已修复手机端网页显示异常问题 
