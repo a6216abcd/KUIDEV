@@ -156,6 +156,7 @@ DEV修复情况
    | `TG_CHAT_ID` | 接收告警的 Telegram Chat ID | - | ❌ |
    | `TG_WEBHOOK_SECRET` | Telegram Webhook 校验密钥，启用 TG 管理时必填 | - | ❌ |
    | `CRON_SECRET` | 外部定时任务调用 `/api/cron_check` 的 Bearer 密钥 | - | ❌ |
+   | `LEGACY_AGENT_AUTH` | 设为 `false` 可提前关闭旧 Agent 迁移兼容 | 临时启用至 2026-08-01 | ❌ |
    | `PROXY_USER` | 住宅 SOCKS5 用户名，启用住宅代理时必须显式配置 | - | ❌ |
    | `PROXY_PASS` | 住宅 SOCKS5 强密码，启用住宅代理时必须显式配置 | - | ❌ |
 
@@ -226,6 +227,10 @@ curl -fsSL --ipv4 https://您的域名/vps/kui.sh | sh -s -- \
 ### 4. 验证接入
 
 安装完成后约 10-30 秒，您的机器会自动出现在全景探针大盘中并开始上报数据。
+
+> 2026-08-01 前请在每台历史 VPS 上重新执行面板当前生成的部署命令，以将旧的管理员哈希凭据迁移为服务器专属 Agent Token。完成全部迁移后可立即设置 `LEGACY_AGENT_AUTH=false`。
+
+> 新版 Agent 每小时通过鉴权端点检查更新，校验 SHA256 和 Python 语法后原子替换并自动重载。历史 Agent 本身没有热更新能力，因此仍需执行一次新版部署命令完成初始化。
 
 > Pages Functions 不直接运行 Cron Trigger。需要离线告警时，请让 Cloudflare Worker Cron、UptimeRobot 或其他定时服务每分钟 `POST https://您的域名/api/cron_check`，并携带请求头 `Authorization: Bearer <CRON_SECRET>`。
 

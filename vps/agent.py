@@ -12,6 +12,7 @@ import socket
 import platform
 import tempfile
 import shutil
+import hashlib
 from datetime import datetime
 
 # 强制系统编码锁
@@ -59,9 +60,45 @@ argo_tunnels = {}
 prev_cpu_total = prev_cpu_idle = 0
 prev_rx = prev_tx = 0
 loop_counter = 0
+last_update_check = 0
 
 # 🌟 住宅IP代理配置缓存
 current_proxy_config = {}
+
+def check_for_update():
+    global last_update_check
+    now = time.time()
+    if now - last_update_check < 3600:
+        return False
+    last_update_check = now
+    temp_path = os.path.abspath(__file__) + ".update.py"
+    try:
+        update_url = f"{BASE_URL}/api/agent_update?ip={urllib.parse.quote(VPS_IP, safe='')}"
+        request = urllib.request.Request(update_url, headers=HEADERS)
+        with urllib.request.urlopen(request, timeout=20) as response:
+            source = response.read(2 * 1024 * 1024 + 1)
+            expected_hash = response.headers.get("X-Agent-SHA256", "").lower()
+        if not source or len(source) > 2 * 1024 * 1024 or not re.fullmatch(r"[0-9a-f]{64}", expected_hash) or hashlib.sha256(source).hexdigest() != expected_hash:
+            raise ValueError("agent update checksum mismatch")
+        with open(__file__, "rb") as current:
+            if hashlib.sha256(current.read()).hexdigest() == expected_hash:
+                return False
+        with open(temp_path, "wb") as update_file:
+            update_file.write(source)
+        os.chmod(temp_path, 0o700)
+        checked = subprocess.run([sys.executable, "-m", "py_compile", temp_path], capture_output=True, text=True)
+        if checked.returncode != 0:
+            raise ValueError(f"agent update compile failed: {checked.stderr.strip()}")
+        os.replace(temp_path, os.path.abspath(__file__))
+        print(f"[agent] updated to {expected_hash[:12]}, restarting", flush=True)
+        os.execv(sys.executable, [sys.executable, os.path.abspath(__file__)])
+    except Exception as error:
+        print(f"[agent] update check failed: {error}", flush=True)
+        try:
+            if os.path.exists(temp_path): os.remove(temp_path)
+        except Exception:
+            pass
+    return False
 
 # 🌟 动态心跳间隔，默认 5 秒
 global_interval = 5
@@ -775,6 +812,7 @@ if __name__ == "__main__":
     time.sleep(2)
     while True:
         try:
+            check_for_update()
             fetched_nodes = fetch_and_apply_configs()
             if fetched_nodes is not None: current_active_nodes = fetched_nodes
             argo_urls = process_argo_nodes(current_active_nodes)

@@ -390,10 +390,9 @@ async function verifyAgent(authHeader, ip, db, env) {
     if (ip) {
         const server = await db.prepare("SELECT agent_token FROM servers WHERE ip = ?").bind(ip).first();
         if (server && server.agent_token && authHeader === server.agent_token) return true;
-    }
-    if (env.LEGACY_AGENT_AUTH === 'true' && ip) {
-        const server = await db.prepare("SELECT agent_token FROM servers WHERE ip = ?").bind(ip).first();
-        if (server && !server.agent_token) return authHeader === await sha256(env.ADMIN_PASSWORD || "admin");
+        const legacyDeadline = Date.UTC(2026, 7, 1);
+        const legacyEnabled = env.LEGACY_AGENT_AUTH !== 'false' && Date.now() < legacyDeadline;
+        if (server && legacyEnabled && authHeader === await sha256(env.ADMIN_PASSWORD || "admin")) return true;
     }
     return false;
 }
@@ -768,6 +767,19 @@ export async function onRequest(context) {
         if (!env.CRON_SECRET || request.headers.get('Authorization') !== `Bearer ${env.CRON_SECRET}`) return new Response('Unauthorized', { status: 401 });
         await ensureDbSchema(db);
         return Response.json({ success: true, alerted: await checkOfflineServers(env) });
+    }
+
+    if (action === "agent_update" && method === "GET") {
+        const ip = new URL(request.url).searchParams.get('ip');
+        if (!(await verifyAgent(request.headers.get('Authorization'), ip, db, env))) return new Response('Unauthorized', { status: 401 });
+        if (!env.ASSETS) return Response.json({ error: 'ASSETS binding is unavailable' }, { status: 503 });
+        const assetUrl = new URL('/vps/agent.py', request.url);
+        const asset = await env.ASSETS.fetch(assetUrl);
+        if (!asset.ok) return new Response('Agent asset not found', { status: 404 });
+        const source = await asset.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256', source);
+        const sha256 = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+        return new Response(source, { headers: { 'Content-Type': 'text/x-python; charset=utf-8', 'Cache-Control': 'no-store', 'X-Agent-SHA256': sha256 } });
     }
 
     // 🌟 Agent 统一探针与管理上报接口 (融入全新的 Reset Day 计算和动态云端测速节点)
