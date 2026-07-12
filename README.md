@@ -188,16 +188,11 @@ openssl rand -base64 32
 
 新部署无需设置此变量。历史 VPS 全部重新执行 Full Deploy Command 后，建议立即设置 `LEGACY_AGENT_AUTH=false` 并重新部署 Pages。
 
-#### 外部住宅控制器（高级，可选）
+#### 住宅控制器无需配置
 
-| 变量名 | 说明 |
-|---|---|
-| `PROXY_CTRL_URL` | 外部住宅控制器根 URL；使用内置 D1 控制器时必须留空 |
-| `PROXY_CTRL_TOKEN` | 外部控制器专用 Token |
-| `PROXY_CTRL_USER` | 外部控制器 Basic Auth 用户名 |
-| `PROXY_CTRL_PASS` | 外部控制器 Basic Auth 密码 |
+KUI 已内置基于 D1 的住宅代理控制器。Full Deploy Command 会自动使用当前 KUI 域名完成配置、控制和心跳上报。正常部署只需配置上面的四个基础变量，不要添加任何 `PROXY_CTRL_*` 变量。
 
-`PROXY_CTRL_TOKEN` 与 Basic Auth 二选一；同时显式配置 `PROXY_CTRL_USER` 和 `PROXY_CTRL_PASS` 时优先使用 Basic Auth，否则使用 `PROXY_CTRL_TOKEN`。配置 `PROXY_CTRL_URL` 后，系统进入外部控制器模式。由于外部控制器凭据与 KUI Agent Token 不同，Full Deploy Command 会明确停止住宅阶段，避免把 KUI Token 错发给外部服务。默认一条命令全量部署时，**不要设置 `PROXY_CTRL_URL`**。
+代码中的 `PROXY_CTRL_*` 仅用于历史项目兼容和二次开发，不属于 KUI 标准部署流程。
 
 #### 不是 Pages 环境变量的选项
 
@@ -227,9 +222,7 @@ openssl rand -base64 32
 
 ## 💻 一条命令接入完整 VPS
 
-KUI、探针、sing-box 与住宅代理已经合并为一次部署流程，不需要再执行第二条住宅代理命令。
-
-> Full Deploy Command 面向默认内置 D1 住宅控制器。若配置了外部 `PROXY_CTRL_URL`，外部控制器通常使用独立 Token/Basic Auth，统一安装器会明确停止住宅阶段；请使用外部控制器的专用凭据执行高级独立部署。
+KUI、探针、sing-box 与住宅代理已经合并为一次部署流程，不需要再执行第二条住宅代理命令，也不需要配置额外的住宅控制器。
 
 ### 1. 在面板添加服务器
 
