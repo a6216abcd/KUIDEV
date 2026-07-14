@@ -33,8 +33,6 @@ async function protectedSubscriptionResponse(request) {
 const MAX_REPORT_BYTES = 256 * 1024;
 const MAX_PROXY_REPORT_BYTES = 32 * 1024;
 const MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
-const MAX_SUBSCRIPTION_LINES = 2000;
-const MAX_SUBSCRIPTION_NODES = 500;
 const MAX_NODE_DELTA_BYTES = 1024 * 1024 * 1024 * 1024;
 const MAX_REPORT_DELTA_BYTES = MAX_NODE_DELTA_BYTES * 10;
 
@@ -360,7 +358,10 @@ async function parseThirdPartySubscription(content) {
             decoded = content;
         }
     }
-    const lines = decoded.split(/\r?\n/).slice(0, MAX_SUBSCRIPTION_LINES).map(l => l.trim()).filter(line => line && line.length <= 16 * 1024);
+    // Keep the legacy importer behavior: parse every line in a downloaded
+    // subscription instead of silently truncating larger airport profiles.
+    // Network size and timeout limits are still enforced before parsing.
+    const lines = decoded.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const protocolCounts = {};
     const debug = { totalLines: lines.length, matched: 0, rejected: 0 };
     for (const raw of lines) {
@@ -454,7 +455,7 @@ async function parseThirdPartySubscription(content) {
         } catch (e) {
             node = null;
         }
-        if (node && node.address && Number.isInteger(Number(node.port)) && Number(node.port) >= 1 && Number(node.port) <= 65535 && nodes.length < MAX_SUBSCRIPTION_NODES) {
+        if (node && node.address && node.port) {
             node.id = crypto.randomUUID();
             nodes.push(node);
             protocolCounts[node.protocol] = (protocolCounts[node.protocol] || 0) + 1;
