@@ -831,19 +831,11 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
             proxy_enabled = bool(proxy_cfg)
             proxy_port, proxy_user, proxy_pass = PROXY_PORT, PROXY_USER, PROXY_PASS
         if proxy_enabled:
-            port_in_use = False
-            for family, addr in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
-                try:
-                    test = socket.socket(family, socket.SOCK_STREAM)
-                    test.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    result = test.connect_ex((addr, int(proxy_port)))
-                    test.close()
-                    if result == 0:
-                        port_in_use = True
-                        break
-                except Exception:
-                    pass
-            if not port_in_use:
+            # proxy-lite owns the residential listener. During simultaneous
+            # service restarts its socket may not be open yet; detecting only
+            # an already-bound port lets sing-box steal the port in that gap.
+            proxy_lite_installed = os.path.exists("/etc/proxy-lite/env") and os.path.exists("/opt/proxy_lite/proxy_server.py")
+            if not proxy_lite_installed:
                 if proxy_port_conflict is not False:
                     print(f"[agent] 端口 {proxy_port} 可用，由 sing-box 提供 SOCKS5 入站", flush=True)
                 proxy_port_conflict = False
@@ -861,7 +853,7 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
                     pass
             else:
                 if proxy_port_conflict is not True:
-                    print(f"[agent] 端口 {proxy_port} 已由 proxy_server 提供服务，跳过重复 SOCKS5 入站", flush=True)
+                    print(f"[agent] 端口 {proxy_port} 预留给 proxy-lite，跳过 sing-box SOCKS5 入站", flush=True)
                 proxy_port_conflict = True
 
     # --- 住宅IP跨VPS互联（mesh）：把本机节点出口链式转发到其它 VPS 的 SOCKS5，实现出口IP共享/轮换 ---
@@ -1315,6 +1307,13 @@ def fetch_and_apply_configs():
                     realtime_channel.send({"success": True, "component": "config", "config_hash": config_hash, "old_config_active": False, "rollback_healthy": True, "applied_at": int(time.time() * 1000)}, "config.result")
             except Exception as error:
                 if apply_egress_change:
+                    # A WARP registration can become unusable after prolonged
+                    # network loss. Drop the cached profile so the scheduled
+                    # retry registers a fresh identity instead of failing on
+                    # the same WireGuard handshake indefinitely.
+                    if runtime_warp != "off" and "WARP " in str(error):
+                        try: os.remove(WARP_CONF_PATH)
+                        except FileNotFoundError: pass
                     rollback_healthy = False
                     try:
                         rb_proxy_mode = egress.get("proxy_mode", "global")
