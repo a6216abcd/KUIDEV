@@ -280,6 +280,13 @@ def _verify_warp_exit(mode):
 
 _residential_exit_ip = ""
 
+def _verified_public_ip(value):
+    try:
+        parsed = ipaddress.ip_address(value.strip())
+        return str(parsed) if parsed.is_global else ""
+    except ValueError:
+        return ""
+
 def _verify_residential_exit(proxy):
     global _residential_exit_ip
     host = str(proxy.get("addr") or "127.0.0.1")
@@ -295,12 +302,25 @@ def _verify_residential_exit(proxy):
     proxy_url = f"socks5h://{auth}{host}:{port}"
     for _ in range(4):
         result = subprocess.run(["curl", "-4", "-fsSL", "--connect-timeout", "5", "--max-time", "15", "--proxy", proxy_url, "https://api.ipify.org"], capture_output=True, text=True)
-        ip = result.stdout.strip()
-        if result.returncode == 0 and re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", ip) and ip != VPS_IP:
+        ip = _verified_public_ip(result.stdout)
+        if result.returncode == 0 and ip and ip != VPS_IP:
             _residential_exit_ip = ip
             return True
         time.sleep(2)
     raise RuntimeError("residential proxy data-plane verification failed")
+
+def _verify_socks5_exit():
+    for _ in range(4):
+        result = subprocess.run(["curl", "-4", "-fsSL", "--connect-timeout", "5", "--max-time", "20", "--proxy", "socks5://127.0.0.1:39482", "https://api.ipify.org"], capture_output=True, text=True)
+        ip = _verified_public_ip(result.stdout)
+        if result.returncode == 0 and ip: return ip
+        time.sleep(2)
+    raise RuntimeError("SOCKS5 data-plane verification failed")
+
+def _verify_native_exit():
+    result = subprocess.run(["curl", "-4", "-fsSL", "--connect-timeout", "5", "--max-time", "20", "https://api.ipify.org"], capture_output=True, text=True)
+    if result.returncode != 0 or not _verified_public_ip(result.stdout):
+        raise RuntimeError("native data-plane verification failed")
 
 def _post_warp_result(payload):
     parsed = urllib.parse.urlsplit(API_URL)
@@ -893,23 +913,23 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
 
     # --- SOCKS5 出站代理：全局出站 / 按分类选择性出站（YouTube / AI / 谷歌 / 流媒体）---
     if socks5_outbound and socks5_outbound.get("enabled"):
-        try:
-            s5_addr = socks5_outbound.get("addr", "")
-            s5_port = int(socks5_outbound.get("port", 0))
-            if s5_addr and s5_port > 0:
-                s5_tag = "socks5-outbound"
-                s5_outbound = {"type": "socks", "tag": s5_tag, "server": s5_addr, "server_port": s5_port}
-                s5_user = socks5_outbound.get("user", "")
-                s5_pass = socks5_outbound.get("pass", "")
-                if s5_user:
-                    s5_outbound["username"] = str(s5_user)
-                if s5_pass:
-                    s5_outbound["password"] = str(s5_pass)
-                singbox_config["outbounds"].append(s5_outbound)
-                singbox_config["inbounds"].append({"type": "socks", "tag": "egress-check-in", "listen": "127.0.0.1", "listen_port": 39482})
-                singbox_config["route"]["rules"].append({"inbound": ["egress-check-in"], "outbound": s5_tag})
-                s5_mode = socks5_outbound.get("mode", "global")
-                if s5_mode == "selective":
+        s5_addr = str(socks5_outbound.get("addr", "")).strip()
+        s5_port = int(socks5_outbound.get("port", 0))
+        if not s5_addr or not 1 <= s5_port <= 65535:
+            raise RuntimeError("invalid SOCKS5 outbound address or port")
+        s5_tag = "socks5-outbound"
+        s5_outbound = {"type": "socks", "tag": s5_tag, "server": s5_addr, "server_port": s5_port}
+        s5_user = socks5_outbound.get("user", "")
+        s5_pass = socks5_outbound.get("pass", "")
+        if s5_user:
+            s5_outbound["username"] = str(s5_user)
+        if s5_pass:
+            s5_outbound["password"] = str(s5_pass)
+        singbox_config["outbounds"].append(s5_outbound)
+        singbox_config["inbounds"].append({"type": "socks", "tag": "egress-check-in", "listen": "127.0.0.1", "listen_port": 39482})
+        singbox_config["route"]["rules"].append({"inbound": ["egress-check-in"], "outbound": s5_tag})
+        s5_mode = socks5_outbound.get("mode", "global")
+        if s5_mode == "selective":
                     # 按分类选择性出站：仅勾选的分类域名走 SOCKS5
                     CATEGORY_DOMAINS = {
                         "youtube": {
@@ -945,6 +965,8 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
                         if entry:
                             all_keywords.extend(entry["keywords"])
                             all_suffixes.extend(entry["suffixes"])
+                    if not all_keywords and not all_suffixes:
+                        raise RuntimeError("selective SOCKS5 mode requires at least one valid category")
                     if all_keywords or all_suffixes:
                         proxy_inbounds = {f"in-{node['id']}" for node in valid_nodes if node.get("protocol") != "dokodemo-door"}
                         # Domain rules only work after sing-box extracts the TLS/HTTP
@@ -969,8 +991,6 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
                         in_tag = f"in-{node['id']}"
                         if in_tag not in existing_routed:
                             singbox_config["route"]["rules"].append({"inbound": [in_tag], "outbound": s5_tag})
-        except Exception:
-            pass
 
     if warp_mode != "off":
         if mesh_enabled:
@@ -1004,9 +1024,9 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
         }
         warp_inbounds = [f"in-{node['id']}" for node in valid_nodes if node.get("protocol") != "dokodemo-door"]
         if warp_inbounds:
-            singbox_config["route"]["rules"].append({"inbound": warp_inbounds, "action": "route", "outbound": "warp-out"})
             if warp_mode == "ipv4": singbox_config["route"]["rules"].append({"inbound": warp_inbounds, "ip_version": 6, "action": "reject"})
             elif warp_mode == "ipv6": singbox_config["route"]["rules"].append({"inbound": warp_inbounds, "ip_version": 4, "action": "reject"})
+            singbox_config["route"]["rules"].append({"inbound": warp_inbounds, "action": "route", "outbound": "warp-out"})
         singbox_config["inbounds"].append({"type": "socks", "tag": "egress-check-in", "listen": "127.0.0.1", "listen_port": 39482})
         check_rule = {"inbound": ["egress-check-in"], "action": "route", "outbound": "warp-out"}
         singbox_config["route"]["rules"].append(check_rule)
@@ -1061,7 +1081,9 @@ def build_singbox_config(nodes, proxy_cfg=None, peers=None, mesh=None, socks5_ou
         subprocess.run(["systemctl", "start", "sing-box"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
         if not _singbox_service_healthy(): raise RuntimeError("sing-box is not healthy after start")
     if socks5_outbound and socks5_outbound.get("source") == "residential": _verify_residential_exit(socks5_outbound)
-    if warp_mode != "off": _verify_warp_exit(warp_mode)
+    elif socks5_outbound and socks5_outbound.get("source") == "manual": _verify_socks5_exit()
+    elif warp_mode != "off": _verify_warp_exit(warp_mode)
+    else: _verify_native_exit()
     for filename in os.listdir("/opt/kui/"):
         if (filename.startswith("cert_") or filename.startswith("key_")) and filename.endswith(".pem") and filename not in active_certs:
             try: os.remove(os.path.join("/opt/kui/", filename))
