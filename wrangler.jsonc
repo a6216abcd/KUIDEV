@@ -17,8 +17,7 @@
   },
   "d1_databases": [
     {
-      "binding": "DB",
-      "database_name": "kui-db"
+      "binding": "DB"
     }
   ],
   "triggers": {
